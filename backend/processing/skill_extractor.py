@@ -26,7 +26,7 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -345,18 +345,33 @@ class SkillExtractionPipeline:
         return list(result.scalars().all())
 
     async def _fetch_feedback(
-        self, db: AsyncSession, topic_label: str
+        self, db: AsyncSession, topic_label: str, document_ids: list[str]
     ) -> list[Feedback]:
-        """Load feedback from any skill whose name resembles the topic.
+        """Load expert feedback from prior extraction rounds of this topic.
 
-        This lets expert corrections from prior extraction rounds flow
-        into re-extractions of the same topic.
+        Primary match: feedback on skills previously extracted from a
+        cluster sharing documents with this one (skill_documents
+        provenance). Cluster topic labels and LLM-chosen skill names
+        rarely coincide, so document overlap — not the name — is what
+        reliably identifies "the same topic, extracted before".
+
+        Fallback match: skill name resembles the topic label (covers
+        legacy skills extracted before skill_documents existed).
         """
-        pattern = f"%{topic_label}%"
+        prior_skill_ids = select(SkillDocument.skill_id).where(
+            SkillDocument.document_id.in_(document_ids)
+        )
+        named_skill_ids = select(Skill.id).where(
+            Skill.name.ilike(f"%{topic_label}%")
+        )
         result = await db.execute(
             select(Feedback)
-            .join(Skill, Feedback.skill_id == Skill.id)
-            .where(Skill.name.ilike(pattern))
+            .where(
+                or_(
+                    Feedback.skill_id.in_(prior_skill_ids),
+                    Feedback.skill_id.in_(named_skill_ids),
+                )
+            )
             .order_by(Feedback.created_at.desc())
             .limit(20)
         )
@@ -683,7 +698,7 @@ class SkillExtractionPipeline:
         doc_lookup: dict[str, Document] = {d.id: d for d in documents}
 
         # 2. Retrieve past feedback for this topic
-        feedback_rows = await self._fetch_feedback(db, topic_label)
+        feedback_rows = await self._fetch_feedback(db, topic_label, document_ids)
 
         # 3. Retrieve source trust scores
         trust_scores = await self._fetch_trust_scores(db, documents)

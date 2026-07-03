@@ -1,16 +1,34 @@
 import axios from 'axios'
 
+// API key: localStorage override (settable at runtime) > build-time env.
+function apiKey() {
+  return localStorage.getItem('cortex_api_key') || import.meta.env.VITE_API_KEY || ''
+}
+
+function withAuth(instance) {
+  instance.interceptors.request.use((config) => {
+    const key = apiKey()
+    if (key) config.headers['X-API-Key'] = key
+    return config
+  })
+  return instance
+}
+
 // v2 API client (new /api/ routes)
-const api = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' },
-})
+const api = withAuth(
+  axios.create({
+    baseURL: '/api',
+    headers: { 'Content-Type': 'application/json' },
+  })
+)
 
 // Legacy v1 client (for document listing)
-const v1 = axios.create({
-  baseURL: '/api/v1',
-  headers: { 'Content-Type': 'application/json' },
-})
+const v1 = withAuth(
+  axios.create({
+    baseURL: '/api/v1',
+    headers: { 'Content-Type': 'application/json' },
+  })
+)
 
 // ── Skills ──────────────────────────────────────────────────────────────────
 
@@ -94,7 +112,7 @@ export function ingestDiscordLive({ guildId, channelIds, botToken }) {
 
 // ── Processing (skill extraction) ───────────────────────────────────────────
 
-const v1Processing = axios.create({ baseURL: '/api/v1/processing' })
+const v1Processing = withAuth(axios.create({ baseURL: '/api/v1/processing' }))
 
 export function clusterDocuments(limit = 500) {
   return v1Processing.post('/cluster', null, { params: { limit } })

@@ -23,6 +23,7 @@ from backend.ingestion.github_ingester import GitHubIngester
 from backend.ingestion.slack_ingester import SlackExportIngester
 from backend.models import Document
 from backend.processing.embedder import DocumentEmbedder
+from backend.security.validation import redact_secrets, validate_upload
 from backend.schemas import (
     DiscordLiveIngestRequest,
     DocumentCreate,
@@ -64,12 +65,8 @@ async def ingest_slack_export(
     file: UploadFile = File(..., description="Slack export .zip file"),
     db: AsyncSession = Depends(get_db),
 ) -> IngestStatusResponse:
-    filename = file.filename or ""
-    if not filename.endswith(".zip"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .zip files are accepted for Slack export ingestion.",
-        )
+    content = await file.read()
+    validate_upload(file.filename or "", len(content), {".zip"})
 
     task_id = str(uuid.uuid4())
     _set_task(task_id, status="running", progress={"stage": "extracting"})
@@ -79,7 +76,6 @@ async def ingest_slack_export(
     try:
         # Write uploaded zip to disk
         zip_path = f"{tmpdir}/export.zip"
-        content = await file.read()
         with open(zip_path, "wb") as f:
             f.write(content)
 
@@ -105,8 +101,9 @@ async def ingest_slack_export(
         logger.info("Slack ingestion task %s completed: %s", task_id, stats)
 
     except Exception as exc:
-        logger.error("Slack ingestion task %s failed: %s", task_id, exc)
-        _set_task(task_id, status="failed", error=str(exc))
+        safe_error = redact_secrets(str(exc))
+        logger.error("Slack ingestion task %s failed: %s", task_id, safe_error)
+        _set_task(task_id, status="failed", error=safe_error)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -132,14 +129,10 @@ async def ingest_file(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     filename = file.filename or ""
-    if not (filename.endswith(".json") or filename.endswith(".csv")):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .csv and .json files are accepted.",
-        )
+    raw = await file.read()
+    validate_upload(filename, len(raw), {".csv", ".json"})
 
     try:
-        raw = await file.read()
         content_str = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise HTTPException(status_code=400, detail=f"Cannot decode file: {exc}")
@@ -192,8 +185,9 @@ async def _run_github_ingest(task_id: str, payload: GitHubIngestRequest) -> None
             task_id, ingested, ingester.stats,
         )
     except Exception as exc:
-        logger.error("GitHub ingestion task %s failed: %s", task_id, exc)
-        _set_task(task_id, status="failed", error=str(exc))
+        safe_error = redact_secrets(str(exc))
+        logger.error("GitHub ingestion task %s failed: %s", task_id, safe_error)
+        _set_task(task_id, status="failed", error=safe_error)
 
 
 @router.post(
@@ -209,10 +203,7 @@ async def _run_github_ingest(task_id: str, payload: GitHubIngestRequest) -> None
     ),
 )
 async def ingest_github_repo(payload: GitHubIngestRequest) -> IngestStatusResponse:
-    if "/" not in payload.repo:
-        raise HTTPException(
-            status_code=400, detail="repo must be in 'owner/repo' form."
-        )
+    # repo format is validated by the GitHubIngestRequest schema (owner/repo).
     task_id = str(uuid.uuid4())
     _set_task(task_id, status="running", progress={"stage": "fetching"})
     asyncio.create_task(_run_github_ingest(task_id, payload))
@@ -267,15 +258,10 @@ async def ingest_discord_export(
     file: UploadFile = File(..., description="DiscordChatExporter .json file"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    filename = file.filename or ""
-    if not filename.endswith(".json"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .json files are accepted for Discord export ingestion.",
-        )
+    raw = await file.read()
+    validate_upload(file.filename or "", len(raw), {".json"})
 
     try:
-        raw = await file.read()
         data = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}")
@@ -322,10 +308,13 @@ async def ingest_discord_live(
     try:
         docs = await ingester.ingest()
     except ConnectionError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=redact_secrets(str(exc)))
     except Exception as exc:
-        logger.error("Discord live ingestion failed: %s", exc)
-        raise HTTPException(status_code=502, detail=f"Discord ingestion failed: {exc}")
+        safe_error = redact_secrets(str(exc))
+        logger.error("Discord live ingestion failed: %s", safe_error)
+        raise HTTPException(
+            status_code=502, detail=f"Discord ingestion failed: {safe_error}"
+        )
 
     ingested = await _store_documents(docs, db)
     return {

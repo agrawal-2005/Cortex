@@ -69,6 +69,11 @@ jobs:
       - name: Run database migrations (Alembic)
         run: alembic upgrade head
 
+      - name: Migration rollback round-trip
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
       - name: Run test suite with coverage
         run: >-
           pytest tests/

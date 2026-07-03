@@ -170,6 +170,71 @@ async def test_query_prefers_strong_match_over_big_weak_cluster(client, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_query_no_skill_returns_matched_documents(client, monkeypatch):
+    """Docs match but no skill exists — return the documents themselves
+    with preview/link/author/relevance plus an extraction suggestion."""
+    doc_id = str(uuid.uuid4())
+    async with TestSessionLocal() as db:
+        db.add(
+            Document(
+                id=doc_id,
+                content="Pin dependency versions in requirements.txt " + "x" * 300,
+                source_type="github_pr",
+                source_id=f"src-{doc_id}",
+                source_link="https://github.com/owner/repo/pull/42",
+                author_name="sarah",
+            )
+        )
+        await db.commit()
+
+    # distance 0.36 -> relevance 0.82
+    monkeypatch.setattr(
+        VectorStore, "search", lambda self, *a, **kw: [_hit(doc_id, distance=0.36)]
+    )
+
+    res = await client.post("/api/query/", json={"question": "dependency pinning?"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["skill"] is None
+    assert data["readable_answer"].startswith(
+        "No structured workflow has been extracted"
+    )
+    assert "Run skill extraction" in data["suggestion"]
+
+    assert len(data["matched_documents"]) == 1
+    doc = data["matched_documents"][0]
+    assert doc["content_preview"].startswith("Pin dependency versions")
+    assert len(doc["content_preview"]) == 200
+    assert doc["source_type"] == "github_pr"
+    assert doc["source_link"] == "https://github.com/owner/repo/pull/42"
+    assert doc["author"] == "sarah"
+    assert doc["relevance"] == pytest.approx(0.82, abs=0.001)
+
+
+@pytest.mark.asyncio
+async def test_query_matched_documents_sorted_by_relevance(client, monkeypatch):
+    doc_a, doc_b = str(uuid.uuid4()), str(uuid.uuid4())
+    async with TestSessionLocal() as db:
+        await _seed_document(db, doc_a)
+        await _seed_document(db, doc_b)
+        await db.commit()
+
+    monkeypatch.setattr(
+        VectorStore,
+        "search",
+        lambda self, *a, **kw: [_hit(doc_a, distance=1.0), _hit(doc_b, distance=0.2)],
+    )
+
+    res = await client.post("/api/query/", json={"question": "anything?"})
+    assert res.status_code == 200
+    matched = res.json()["matched_documents"]
+    assert [m["relevance"] for m in matched] == sorted(
+        (m["relevance"] for m in matched), reverse=True
+    )
+    assert matched[0]["content_preview"] == f"content of {doc_b}"
+
+
+@pytest.mark.asyncio
 async def test_extract_from_cluster_links_all_cluster_documents():
     """Extraction writes skill_documents rows for EVERY doc in the cluster,
     not just the ones the LLM cited."""

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, Search, History, Loader2, ArrowRight, User, BrainCircuit } from 'lucide-react'
+import { Send, Search, History, Loader2, ArrowRight, User, BrainCircuit, ExternalLink, Sparkles } from 'lucide-react'
 import { queryKnowledge } from '../api/client'
 import { StatusBadge, DeptBadge, ConfidenceBar, Button } from '../components/Primitives'
 import SourceIcon from '../components/SourceIcon'
@@ -16,8 +16,67 @@ function loadRecent() {
   }
 }
 
+function MatchedDocuments({ readable_answer, matched_documents, suggestion }) {
+  return (
+    <div className="space-y-4">
+      {readable_answer && (
+        <p className="text-sm text-text leading-relaxed">{readable_answer}</p>
+      )}
+      <div className="space-y-2">
+        {matched_documents.map((doc, i) => (
+          <div key={i} className="bg-bg border border-border rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="w-6 h-6 rounded-md bg-surface-2 border border-border flex items-center justify-center shrink-0">
+                <SourceIcon name={doc.source_type} size={12} />
+              </span>
+              <span className="text-[10px] font-medium text-text-dim uppercase tracking-wider">
+                {doc.source_type?.replace(/_/g, ' ')}
+              </span>
+              {doc.author && (
+                <span className="text-[10px] text-text-dim">by {doc.author}</span>
+              )}
+              <span className="ml-auto text-[10px] font-semibold tabular-nums" style={{ color: confidenceColor(doc.relevance) }}>
+                {pct(doc.relevance)}
+              </span>
+            </div>
+            <p className="text-xs text-text-dim line-clamp-3">{doc.content_preview}</p>
+            {doc.source_link && (
+              <a
+                href={doc.source_link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1.5"
+              >
+                View source <ExternalLink size={10} />
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+      {suggestion && (
+        <div className="flex items-start gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2.5">
+          <Sparkles size={13} className="text-primary shrink-0 mt-0.5" />
+          <p className="text-xs text-text-dim">
+            {suggestion}{' '}
+            <Link to="/sources" className="text-primary hover:underline">Go to Sources</Link>
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SkillResult({ result }) {
-  const { skill, readable_answer, source_hits, confidence } = result
+  const { skill, readable_answer, source_hits, matched_documents, suggestion, confidence } = result
+  if (!skill && matched_documents?.length > 0) {
+    return (
+      <MatchedDocuments
+        readable_answer={readable_answer}
+        matched_documents={matched_documents}
+        suggestion={suggestion}
+      />
+    )
+  }
   if (!skill && !readable_answer && !source_hits?.length) {
     return (
       <p className="text-sm text-text-dim">

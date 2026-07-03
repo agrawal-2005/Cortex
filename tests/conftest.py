@@ -6,9 +6,12 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from httpx import AsyncClient, ASGITransport
 
 from backend.database import Base, get_db
+from backend.knowledge.models import ApiKey
 from backend.main import app
 from backend.processing.embedder import DocumentEmbedder
 from backend.processing.embeddings import EmbeddingService
+from backend.security.auth import generate_api_key, hash_api_key
+from backend.security.ratelimit import limiter
 from backend.vectorstore.store import VectorStore
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -59,6 +62,14 @@ def _offline_embeddings(monkeypatch):
     monkeypatch.setattr(VectorStore, "search", lambda self, *a, **kw: [])
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Each test starts with a clean rate-limit window."""
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def setup_db():
     async with engine_test.begin() as conn:
@@ -69,7 +80,30 @@ async def setup_db():
 
 
 @pytest_asyncio.fixture
-async def client():
+async def api_key(setup_db) -> str:
+    """A valid API key persisted in the test database."""
+    key = generate_api_key()
+    async with TestSessionLocal() as session:
+        session.add(ApiKey(name="test", key_hash=hash_api_key(key), prefix=key[:8]))
+        await session.commit()
+    return key
+
+
+@pytest_asyncio.fixture
+async def client(api_key):
+    """Authenticated test client — sends a valid X-API-Key on every request."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-API-Key": api_key},
+    ) as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture
+async def anon_client():
+    """Unauthenticated client for exercising 401 paths."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

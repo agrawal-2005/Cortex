@@ -10,11 +10,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.database import get_db
-from backend.knowledge.models import Skill, SkillDocument, SkillStep, StepSource
+from backend.knowledge.models import (
+    Document,
+    Skill,
+    SkillDocument,
+    SkillStep,
+    StepSource,
+)
 from backend.processing.embedder import COLLECTION_NAME as DOC_COLLECTION
 from backend.processing.embeddings import EmbeddingService
 from backend.processing.renderer import render_skill_plain
-from backend.schemas import QueryRequest, QueryResponse, QuerySourceHit, SkillResponse
+from backend.schemas import (
+    MatchedDocument,
+    QueryRequest,
+    QueryResponse,
+    QuerySourceHit,
+    SkillResponse,
+)
 from backend.vectorstore.store import VectorStore
 
 router = APIRouter(tags=["query"])
@@ -106,13 +118,19 @@ async def query_knowledge(
     skill = await _find_best_skill(db, doc_relevance)
 
     if skill is None:
+        matched = await _matched_documents(db, doc_relevance)
         return QueryResponse(
             question=question,
             readable_answer=(
-                "Found related documents but no extracted skill yet. "
-                "Run the extraction pipeline on these documents."
+                "No structured workflow has been extracted for this topic "
+                "yet. However, I found relevant source documents:"
             ),
             source_hits=source_hits[:5],
+            matched_documents=matched,
+            suggestion=(
+                "Run skill extraction to generate a structured workflow "
+                "from these documents."
+            ),
         )
 
     # 5. Build response
@@ -126,6 +144,29 @@ async def query_knowledge(
         source_hits=source_hits[:5],
         confidence=skill.confidence,
     )
+
+
+async def _matched_documents(
+    db: AsyncSession, doc_relevance: dict[str, float]
+) -> list[MatchedDocument]:
+    """Load the matched Document rows to expose source_link / author,
+    which the vector-store hit metadata does not carry."""
+    result = await db.execute(
+        select(Document).where(Document.id.in_(doc_relevance.keys()))
+    )
+    docs = result.scalars().all()
+    matched = [
+        MatchedDocument(
+            content_preview=(doc.content or "")[:200],
+            source_type=doc.source_type,
+            source_link=doc.source_link,
+            author=doc.author_name,
+            relevance=round(doc_relevance.get(doc.id, 0.0), 3),
+        )
+        for doc in docs
+    ]
+    matched.sort(key=lambda m: m.relevance, reverse=True)
+    return matched[:5]
 
 
 async def _find_best_skill(

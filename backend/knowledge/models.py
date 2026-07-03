@@ -131,6 +131,35 @@ class Feedback(Base):
     step: Mapped["SkillStep | None"] = relationship(back_populates="feedback", foreign_keys=[step_id])
 
 
+class ApiKey(Base):
+    """API keys for authenticating requests. Only the SHA-256 hash of the
+    key is stored — the plaintext is shown once at creation time."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(255))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(12))  # first chars, for display
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
+class ConnectedSource(Base):
+    """A configured external source (GitHub repo, Discord guild, ...) whose
+    access token is stored Fernet-encrypted. The token is never returned by
+    the API after creation."""
+
+    __tablename__ = "connected_sources"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(255))
+    source_type: Mapped[str] = mapped_column(String(50))  # github, discord, slack
+    encrypted_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)  # repo, guild_id, ...
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
 class SourceTrust(Base):
     __tablename__ = "source_trust"
 

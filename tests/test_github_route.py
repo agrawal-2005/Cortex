@@ -10,7 +10,8 @@ from tests.conftest import TestSessionLocal
 @pytest.mark.asyncio
 async def test_github_route_rejects_bad_repo(client):
     response = await client.post("/api/ingest/github", json={"repo": "not-a-repo"})
-    assert response.status_code == 400
+    # schema-level validation rejects malformed owner/repo with 422
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

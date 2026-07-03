@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.models import Document
+from backend.security.validation import validate_upload
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +47,10 @@ async def ingest_slack_export(
     Each message with non-empty text (and not a join/leave event) is stored as
     a Document with ``source_type='slack'``.
     """
-    if not file.filename or not file.filename.endswith(".json"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .json files are accepted for Slack export ingestion.",
-        )
+    raw = await file.read()
+    validate_upload(file.filename or "", len(raw), {".json"})
 
     try:
-        raw = await file.read()
         data = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HTTPException(
@@ -120,14 +117,10 @@ async def ingest_file_upload(
     ``source_label``, ``channel_or_project``, ``author_name``, ``author_role``.
     """
     filename = file.filename or ""
-    if not (filename.endswith(".json") or filename.endswith(".csv")):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .json and .csv files are accepted.",
-        )
+    raw = await file.read()
+    validate_upload(filename, len(raw), {".csv", ".json"})
 
     try:
-        raw = await file.read()
         content_str = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise HTTPException(

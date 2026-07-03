@@ -10,7 +10,40 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "meta-llama/Llama-3.1-8B-Instruct"
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # ── Security ──────────────────────────────────────────────────────────
+    # "development" or "production" — controls CORS strictness.
+    ENVIRONMENT: str = "development"
+    # Comma-separated allowed origins. Required in production; defaults to
+    # localhost dev servers otherwise.
+    CORS_ORIGINS: str = ""
+    # Fernet key (44-char urlsafe base64) for encrypting stored source
+    # tokens. If empty, an ephemeral key is generated at startup — stored
+    # tokens then become unreadable after a restart, so set it in prod.
+    TOKEN_ENCRYPTION_KEY: str = ""
+    # Per-API-key rate limits.
+    RATE_LIMIT_INGEST_PER_HOUR: int = 10
+    RATE_LIMIT_QUERY_PER_HOUR: int = 100
+    # Upload cap in megabytes.
+    MAX_UPLOAD_MB: int = 50
+
     model_config = {"env_file": ".env"}
+
+    def cors_origins_list(self) -> list[str]:
+        """Resolve allowed CORS origins for the current environment."""
+        configured = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if configured:
+            return configured
+        if self.ENVIRONMENT == "production":
+            # Never fall back to permissive defaults in production.
+            raise RuntimeError(
+                "CORS_ORIGINS must be set explicitly when ENVIRONMENT=production"
+            )
+        return [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
 
 
 settings = Settings()

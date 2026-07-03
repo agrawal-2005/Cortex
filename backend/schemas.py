@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # --- Document schemas ---
@@ -173,11 +173,24 @@ class QuerySourceHit(BaseModel):
     relevance: float
 
 
+class MatchedDocument(BaseModel):
+    """A relevant source document returned when no skill has been
+    extracted for the topic yet."""
+
+    content_preview: str
+    source_type: str
+    source_link: Optional[str] = None
+    author: Optional[str] = None
+    relevance: float
+
+
 class QueryResponse(BaseModel):
     question: str
     skill: Optional[SkillResponse] = None
     readable_answer: str = ""
     source_hits: list[QuerySourceHit] = []
+    matched_documents: list[MatchedDocument] = []
+    suggestion: str = ""
     confidence: float = 0.0
 
 
@@ -190,6 +203,13 @@ class GitHubIngestRequest(BaseModel):
     months: int = 6
     max_requests: Optional[int] = None  # default: 55 unauthenticated, 4000 with token
     include_comments: bool = True
+
+    @field_validator("repo")
+    @classmethod
+    def _validate_repo(cls, v: str) -> str:
+        from backend.security.validation import validate_repo
+
+        return validate_repo(v)
 
 
 # --- Discord ingestion schemas ---
