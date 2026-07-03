@@ -27,8 +27,8 @@ router = APIRouter(tags=["processing"])
 @router.post("/cluster")
 async def cluster_documents(
     limit: int = Query(100, ge=1, le=500),
-    eps: float = Query(0.5, ge=0.1, le=2.0),
-    min_samples: int = Query(2, ge=1, le=10),
+    min_cluster_size: int = Query(3, ge=2, le=50),
+    min_samples: int = Query(1, ge=1, le=10),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Cluster all documents by semantic similarity."""
@@ -45,7 +45,9 @@ async def cluster_documents(
         for d in docs
     ]
 
-    clusterer = TopicClusterer(eps=eps, min_samples=min_samples)
+    clusterer = TopicClusterer(
+        min_cluster_size=min_cluster_size, min_samples=min_samples
+    )
     clusters = clusterer.cluster_documents(doc_dicts)
 
     return {

@@ -12,11 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 class VectorStore:
-    """Wraps ChromaDB for storing and querying skill embeddings."""
+    """Wraps ChromaDB for storing and querying embeddings.
+
+    Defaults to the skill collection; pass ``collection_name`` to wrap a
+    different collection (e.g. ``cortex_documents`` for document search).
+    """
 
     COLLECTION_NAME = "cortex_skills"
 
-    def __init__(self) -> None:
+    def __init__(self, collection_name: str | None = None) -> None:
+        self.collection_name = collection_name or self.COLLECTION_NAME
         self._client: chromadb.PersistentClient | None = None
         self._collection: Collection | None = None
 
@@ -29,12 +34,12 @@ class VectorStore:
         return self._client
 
     def _get_collection(self) -> Collection:
-        """Get or create the skills collection."""
+        """Get or create the wrapped collection."""
         if self._collection is None:
             client = self._get_client()
             self._collection = client.get_or_create_collection(
-                name=self.COLLECTION_NAME,
-                metadata={"description": "Cortex skill embeddings"},
+                name=self.collection_name,
+                metadata={"description": "Cortex embeddings"},
             )
         return self._collection
 
@@ -120,6 +125,6 @@ class VectorStore:
         """
         collection = self._get_collection()
         return {
-            "collection_name": self.COLLECTION_NAME,
+            "collection_name": self.collection_name,
             "count": collection.count(),
         }

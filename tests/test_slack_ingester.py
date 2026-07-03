@@ -10,16 +10,13 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "sample_slack_export"
 
 @pytest.fixture
 def ingester():
-    """Create ingester with mocked embedding service and vector store."""
-    with patch("backend.ingestion.slack_ingester.EmbeddingService") as mock_emb, \
-         patch("backend.ingestion.slack_ingester.VectorStore") as mock_vs:
-        mock_emb_instance = MagicMock()
-        mock_emb_instance.generate_embeddings.side_effect = lambda texts: [[0.1] * 384 for _ in texts]
-        mock_emb_instance.generate_embedding.return_value = [0.1] * 384
-        mock_emb.return_value = mock_emb_instance
-
-        mock_vs_instance = MagicMock()
-        mock_vs.return_value = mock_vs_instance
+    """Create ingester with a mocked document embedder."""
+    with patch("backend.ingestion.slack_ingester.DocumentEmbedder") as mock_embedder:
+        mock_instance = MagicMock()
+        mock_instance.embed_documents = AsyncMock(
+            return_value={"embedded": 0, "skipped": 0, "errors": 0, "total": 0}
+        )
+        mock_embedder.return_value = mock_instance
 
         ing = SlackExportIngester(FIXTURE_DIR)
         yield ing

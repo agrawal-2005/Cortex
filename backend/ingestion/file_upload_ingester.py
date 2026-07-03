@@ -10,8 +10,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.knowledge.models import Document
-from backend.processing.embeddings import EmbeddingService
-from backend.vectorstore.store import VectorStore
+from backend.processing.embedder import DocumentEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +19,7 @@ class FileUploadIngester:
     """Ingests documents from CSV or JSON file uploads."""
 
     def __init__(self):
-        self.embedding_service = EmbeddingService()
-        self.vector_store = VectorStore()
+        self.embedder = DocumentEmbedder()
 
     async def ingest_json(
         self,
@@ -97,24 +95,10 @@ class FileUploadIngester:
             for doc in created_docs:
                 await db.refresh(doc)
 
-            # Generate embeddings
-            texts = [d.content[:500] for d in created_docs]
-            embeddings = self.embedding_service.generate_embeddings(texts)
-
-            for doc, embedding in zip(created_docs, embeddings):
-                embedding_id = f"doc-{doc.id}"
-                self.vector_store.add_skill(
-                    skill_id=embedding_id,
-                    text=doc.content[:500],
-                    embedding=embedding,
-                    metadata={
-                        "document_id": doc.id,
-                        "source_type": doc.source_type,
-                    },
-                )
-                doc.embedding_id = embedding_id
-
-            await db.flush()
+            # Generate embeddings (stored in the cortex_documents collection)
+            await self.embedder.embed_documents(
+                db, document_ids=[d.id for d in created_docs]
+            )
 
         return {
             "status": "success",

@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.database import get_db
 from backend.knowledge.models import Skill, SkillStep, StepSource
+from backend.processing.embedder import COLLECTION_NAME as DOC_COLLECTION
 from backend.processing.embeddings import EmbeddingService
 from backend.processing.renderer import render_skill_plain
 from backend.schemas import QueryRequest, QueryResponse, QuerySourceHit, SkillResponse
@@ -19,7 +20,8 @@ from backend.vectorstore.store import VectorStore
 router = APIRouter(tags=["query"])
 
 _embedding_service = EmbeddingService()
-_vector_store = VectorStore()
+# Search DOCUMENT embeddings (cortex_documents) — all ingesters write there.
+_vector_store = VectorStore(collection_name=DOC_COLLECTION)
 
 # Minimum relevance score (0-1) for a document to be considered a match.
 # Below this threshold, results are treated as "no match found".

@@ -73,7 +73,7 @@ async def submit_feedback(
     await db.refresh(feedback)
 
     # Update skill status based on feedback action
-    now = datetime.now(timezone.utc).replace(tzinfo=None).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     if payload.action == "approve":
         skill.status = "verified"
         skill.verified_by = payload.submitted_by
@@ -82,7 +82,9 @@ async def submit_feedback(
         skill.status = "outdated"
     elif payload.action == "edit":
         skill.status = "review"
-        skill.version += 1
+        # Atomic server-side increment — a plain `version += 1` is a
+        # read-modify-write that loses updates under concurrent feedback.
+        skill.version = Skill.version + 1
 
     await db.flush()
 

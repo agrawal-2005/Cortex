@@ -9,8 +9,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.knowledge.models import Document
-from backend.processing.embeddings import EmbeddingService
-from backend.vectorstore.store import VectorStore
+from backend.processing.embedder import DocumentEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +22,7 @@ class SlackExportIngester:
         self.users: dict[str, dict] = {}        # user_id -> user data
         self.channels: dict[str, dict] = {}      # channel_id -> channel data
         self.channel_names: dict[str, str] = {}  # channel directory name -> display name
-        self.embedding_service = EmbeddingService()
-        self.vector_store = VectorStore()
+        self.embedder = DocumentEmbedder()
         self.stats = {
             "messages_processed": 0,
             "threads_processed": 0,
@@ -184,7 +182,12 @@ class SlackExportIngester:
                 full_content += "\n\n" + "\n\n".join(attachment_texts)
 
             try:
-                created_at = datetime.fromtimestamp(float(ts), tz=timezone.utc) if ts else None
+                # Naive UTC — asyncpg rejects tz-aware datetimes on naive columns
+                created_at = (
+                    datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                    .replace(tzinfo=None)
+                    if ts else None
+                )
             except (ValueError, OSError):
                 created_at = None
 
@@ -230,7 +233,11 @@ class SlackExportIngester:
                 "channel_or_project": channel_name,
                 "author_name": self._get_user_name(first_user),
                 "author_role": self._get_user_role(first_user),
-                "created_at": datetime.fromtimestamp(float(parent_ts), tz=timezone.utc) if parent_ts else None,
+                "created_at": (
+                    datetime.fromtimestamp(float(parent_ts), tz=timezone.utc)
+                    .replace(tzinfo=None)
+                    if parent_ts else None
+                ),
             })
             self.stats["threads_processed"] += 1
 
@@ -289,32 +296,9 @@ class SlackExportIngester:
 
         # Step 4: Generate embeddings and store in ChromaDB
         if created_docs:
-            texts = [d.content[:500] for d in created_docs]
-            logger.info("Generating embeddings for %d documents...", len(texts))
-
-            batch_size = 64
-            for i in range(0, len(created_docs), batch_size):
-                batch_docs = created_docs[i:i + batch_size]
-                batch_texts = texts[i:i + batch_size]
-                embeddings = self.embedding_service.generate_embeddings(batch_texts)
-
-                for doc, embedding in zip(batch_docs, embeddings):
-                    embedding_id = f"doc-{doc.id}"
-                    self.vector_store.add_skill(
-                        skill_id=embedding_id,
-                        text=doc.content[:500],
-                        embedding=embedding,
-                        metadata={
-                            "document_id": doc.id,
-                            "source_type": doc.source_type,
-                            "channel": doc.channel_or_project or "",
-                            "author": doc.author_name or "",
-                        },
-                    )
-                    doc.embedding_id = embedding_id
-
-                await db.flush()
-                logger.info("Embedded batch %d-%d", i, i + len(batch_docs))
+            await self.embedder.embed_documents(
+                db, document_ids=[d.id for d in created_docs]
+            )
 
         logger.info("Slack ingestion complete: %s", self.stats)
         return self.stats

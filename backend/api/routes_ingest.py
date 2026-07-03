@@ -22,6 +22,7 @@ from backend.ingestion.file_upload_ingester import FileUploadIngester
 from backend.ingestion.github_ingester import GitHubIngester
 from backend.ingestion.slack_ingester import SlackExportIngester
 from backend.models import Document
+from backend.processing.embedder import DocumentEmbedder
 from backend.schemas import (
     DiscordLiveIngestRequest,
     DocumentCreate,
@@ -224,8 +225,9 @@ async def ingest_github_repo(payload: GitHubIngestRequest) -> IngestStatusRespon
 async def _store_documents(
     docs: list[DocumentCreate], db: AsyncSession
 ) -> int:
-    """Store documents, skipping ones already ingested (same source_type +
-    source_id) so that re-syncing a source doesn't create duplicates."""
+    """Store documents and embed them, skipping ones already ingested (same
+    source_type + source_id) so that re-syncing a source doesn't create
+    duplicates."""
     if not docs:
         return 0
     source_ids = {d.source_id for d in docs if d.source_id}
@@ -237,15 +239,19 @@ async def _store_documents(
             )
         )
         existing = {tuple(row) for row in result.all()}
-    stored = 0
+    new_docs: list[Document] = []
     for payload in docs:
         if payload.source_id and (payload.source_type, payload.source_id) in existing:
             continue
-        db.add(Document(**payload.model_dump()))
-        stored += 1
-    if stored:
+        doc = Document(**payload.model_dump())
+        db.add(doc)
+        new_docs.append(doc)
+    if new_docs:
         await db.flush()
-    return stored
+        await DocumentEmbedder().embed_documents(
+            db, document_ids=[d.id for d in new_docs]
+        )
+    return len(new_docs)
 
 
 @router.post(

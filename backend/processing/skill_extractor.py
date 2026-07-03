@@ -51,6 +51,98 @@ logger = logging.getLogger(__name__)
 MAX_PROMPT_DOCS = 40
 MAX_DOC_CHARS = 4000
 
+# ── LLM failure-handling constants ───────────────────────────────────────
+MAX_LLM_ATTEMPTS = 3
+LLM_TIMEOUT_SECONDS = 60.0          # per-call hard limit
+RETRY_BACKOFF_BASE = 1.0            # generic retry: 1s, 2s
+RATE_LIMIT_BACKOFF_BASE = 5.0       # 429 retry: 5s, 10s
+MIN_SKILL_STEPS = 3                 # a skill with fewer steps is rejected
+
+# Appended to the user prompt when a previous attempt returned unusable
+# output (bad JSON or wrong schema).
+STRICT_FORMAT_REMINDER = (
+    "\n\n## STRICT FORMAT REMINDER\n"
+    "Your previous response could not be used. You MUST respond with ONLY "
+    "one complete, valid JSON object — no prose, no markdown fences, no "
+    "truncation. The object MUST contain a \"steps\" array with at least "
+    f"{MIN_SKILL_STEPS} step objects, each citing source documents. Do not "
+    "include any text before or after the JSON object."
+)
+
+
+class LLMCreditsExhaustedError(RuntimeError):
+    """The LLM provider returned HTTP 402 — credits exhausted.
+
+    Non-retryable: extraction must stop gracefully, keeping completed
+    skills and reporting the clusters that remain.
+    """
+
+
+class LLMTimeoutError(RuntimeError):
+    """The LLM call exceeded LLM_TIMEOUT_SECONDS.
+
+    Non-retryable for the current cluster — the pipeline moves on.
+    """
+
+
+class SchemaValidationError(ValueError):
+    """The LLM returned valid JSON that does not match the skill schema."""
+
+
+class EmptyLLMResponseError(RuntimeError):
+    """The LLM returned an empty or whitespace-only response."""
+
+
+async def _sleep(seconds: float) -> None:
+    """Indirection over asyncio.sleep so tests can stub retry delays."""
+    await asyncio.sleep(seconds)
+
+
+_STATUS_CODE_PATTERN = re.compile(r"\b(402|429|500|502|503|504)\b")
+
+
+def _http_status_of(exc: BaseException) -> int | None:
+    """Best-effort extraction of an HTTP status code from a provider error.
+
+    huggingface_hub raises HfHubHTTPError with a ``.response`` attribute;
+    other layers may only carry the code (or a recognisable phrase) in the
+    message.
+    """
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int):
+        return status
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status
+
+    message = str(exc)
+    match = _STATUS_CODE_PATTERN.search(message)
+    if match:
+        return int(match.group(1))
+
+    lowered = message.lower()
+    if "payment required" in lowered or "exceeded your monthly included credits" in lowered:
+        return 402
+    if "rate limit" in lowered or "too many requests" in lowered:
+        return 429
+    return None
+
+
+def _validate_skill_schema(parsed: dict[str, Any]) -> None:
+    """Reject LLM output that parses as JSON but is not a usable skill."""
+    if not isinstance(parsed, dict):
+        raise SchemaValidationError("response is not a JSON object")
+    steps = parsed.get("steps")
+    if steps is None:
+        raise SchemaValidationError('missing required "steps" field')
+    if not isinstance(steps, list):
+        raise SchemaValidationError('"steps" must be an array')
+    if len(steps) < MIN_SKILL_STEPS:
+        raise SchemaValidationError(
+            f"skill has {len(steps)} step(s); at least {MIN_SKILL_STEPS} required"
+        )
+
 # ── Confidence-scoring constants ──────────────────────────────────────────
 
 # Recency weights (days since document was created)
@@ -123,6 +215,40 @@ def _evidence_weight(source_type: str | None) -> float:
     return _EVIDENCE_WEIGHTS.get(source_type.lower(), _EVIDENCE_DEFAULT)
 
 
+def _repair_json(text: str) -> str:
+    """Append the closing braces/brackets a truncated JSON object is missing.
+
+    Walks the text tracking string/escape state, then closes any containers
+    that were left open (a common LLM failure: output cut off mid-object).
+    """
+    stack: list[str] = []
+    in_string = False
+    escape = False
+    for ch in text:
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+
+    if in_string:
+        text += '"'
+    closers = {"{": "}", "[": "]"}
+    return text + "".join(closers[c] for c in reversed(stack))
+
+
 def _sanitize_json(text: str) -> str:
     """Best-effort cleanup of LLM-produced JSON.
 
@@ -130,6 +256,7 @@ def _sanitize_json(text: str) -> str:
     - markdown code fences
     - trailing commas before } or ]
     - leading/trailing prose
+    - truncated output missing closing braces/brackets (repaired)
     """
     # Strip markdown fences
     text = text.strip()
@@ -138,17 +265,24 @@ def _sanitize_json(text: str) -> str:
         lines = [ln for ln in lines if not ln.strip().startswith("```")]
         text = "\n".join(lines).strip()
 
-    # Find the outermost JSON object
     start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
+    if start == -1:
         raise json.JSONDecodeError("No JSON object found in response", text, 0)
-    text = text[start : end + 1]
 
-    # Remove trailing commas (e.g.  ,} or ,])
-    text = re.sub(r",\s*([}\]])", r"\1", text)
+    # Happy path: a complete outermost object exists
+    end = text.rfind("}")
+    if end > start:
+        candidate = re.sub(r",\s*([}\]])", r"\1", text[start : end + 1])
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass  # fall through to repair
 
-    return text
+    # Repair path: assume the JSON runs to the end of the text but was
+    # truncated — balance the missing closers.
+    candidate = _repair_json(text[start:].rstrip())
+    return re.sub(r",\s*([}\]])", r"\1", candidate)
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────
@@ -260,8 +394,18 @@ class SkillExtractionPipeline:
         doc_dicts: list[dict[str, Any]],
         feedback_dicts: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Call the LLM with retries and parse the JSON response."""
-        user_prompt = build_extraction_prompt(
+        """Call the LLM with retries and parse the JSON response.
+
+        Failure handling:
+        - empty response / bad JSON / wrong schema → retry (schema and JSON
+          failures retry with a stricter prompt appended)
+        - timeout (> LLM_TIMEOUT_SECONDS)          → LLMTimeoutError, no retry
+        - HTTP 402 (credits exhausted)             → LLMCreditsExhaustedError,
+          no retry — the caller stops extraction gracefully
+        - HTTP 429 (rate limit)                    → longer exponential backoff
+        - other errors (e.g. HTTP 500)             → standard backoff retry
+        """
+        base_prompt = build_extraction_prompt(
             topic_label=topic_label,
             documents=doc_dicts,
             feedback_items=feedback_dicts,
@@ -269,31 +413,80 @@ class SkillExtractionPipeline:
 
         chain = self._get_chain()
         last_exc: Exception | None = None
+        user_prompt = base_prompt
 
-        for attempt in range(3):
+        for attempt in range(MAX_LLM_ATTEMPTS):
             try:
-                raw: str = await chain.ainvoke({
-                    "system_prompt": EXTRACTION_SYSTEM_PROMPT,
-                    "user_prompt": user_prompt,
-                })
+                raw: str = await asyncio.wait_for(
+                    chain.ainvoke({
+                        "system_prompt": EXTRACTION_SYSTEM_PROMPT,
+                        "user_prompt": user_prompt,
+                    }),
+                    timeout=LLM_TIMEOUT_SECONDS,
+                )
+                if not raw or not raw.strip():
+                    raise EmptyLLMResponseError("LLM returned an empty response")
                 cleaned = _sanitize_json(raw)
                 parsed: dict[str, Any] = json.loads(cleaned)
+                _validate_skill_schema(parsed)
                 return parsed
+            except asyncio.TimeoutError as exc:
+                logger.error(
+                    "LLM call timed out after %.0fs for topic '%s' — skipping cluster",
+                    LLM_TIMEOUT_SECONDS,
+                    topic_label,
+                )
+                raise LLMTimeoutError(
+                    f"LLM call for topic '{topic_label}' timed out "
+                    f"after {LLM_TIMEOUT_SECONDS:.0f}s"
+                ) from exc
+            except EmptyLLMResponseError as exc:
+                last_exc = exc
+                logger.warning(
+                    "Empty LLM response on attempt %d/%d for topic '%s'",
+                    attempt + 1, MAX_LLM_ATTEMPTS, topic_label,
+                )
+            except SchemaValidationError as exc:
+                last_exc = exc
+                logger.warning(
+                    "Schema validation failed on attempt %d/%d: %s — "
+                    "retrying with stricter prompt",
+                    attempt + 1, MAX_LLM_ATTEMPTS, exc,
+                )
+                user_prompt = base_prompt + STRICT_FORMAT_REMINDER
             except json.JSONDecodeError as exc:
                 last_exc = exc
                 logger.warning(
-                    "JSON parse error on attempt %d/3: %s", attempt + 1, exc
+                    "JSON parse error on attempt %d/%d: %s",
+                    attempt + 1, MAX_LLM_ATTEMPTS, exc,
                 )
+                user_prompt = base_prompt + STRICT_FORMAT_REMINDER
             except Exception as exc:
+                status = _http_status_of(exc)
+                if status == 402:
+                    logger.error(
+                        "LLM credits exhausted (HTTP 402) — stopping extraction: %s",
+                        exc,
+                    )
+                    raise LLMCreditsExhaustedError(str(exc)) from exc
                 last_exc = exc
+                if status == 429:
+                    logger.warning(
+                        "Rate limited (HTTP 429) on attempt %d/%d: %s",
+                        attempt + 1, MAX_LLM_ATTEMPTS, exc,
+                    )
+                    if attempt < MAX_LLM_ATTEMPTS - 1:
+                        await _sleep(RATE_LIMIT_BACKOFF_BASE * (2 ** attempt))
+                    continue
                 logger.warning(
-                    "LLM call error on attempt %d/3: %s", attempt + 1, exc
+                    "LLM call error on attempt %d/%d: %s",
+                    attempt + 1, MAX_LLM_ATTEMPTS, exc,
                 )
-            if attempt < 2:
-                await asyncio.sleep(2 ** attempt)
+            if attempt < MAX_LLM_ATTEMPTS - 1:
+                await _sleep(RETRY_BACKOFF_BASE * (2 ** attempt))
 
         raise RuntimeError(
-            f"Skill extraction failed after 3 attempts: {last_exc}"
+            f"Skill extraction failed after {MAX_LLM_ATTEMPTS} attempts: {last_exc}"
         )
 
     # ── Confidence calculation ────────────────────────────────────────
@@ -549,10 +742,15 @@ class SkillExtractionPipeline:
 
         Returns:
             List of persisted Skill objects.
+
+        Each successfully extracted skill is committed immediately, so a
+        failure in a later cluster never rolls back earlier work.  A 402
+        (credits exhausted) stops extraction gracefully and logs which
+        clusters remain unprocessed.
         """
         skills: list[Skill] = []
 
-        for cluster in clusters:
+        for index, cluster in enumerate(clusters):
             cluster_id = cluster.get("cluster_id", -1)
             if cluster_id == -1:
                 logger.info("Skipping noise cluster")
@@ -577,7 +775,28 @@ class SkillExtractionPipeline:
                     topic_label=label,
                 )
                 skills.append(skill)
+                # Commit per cluster — each skill cost an LLM call and must
+                # survive failures in later clusters.
+                await db.commit()
+            except LLMCreditsExhaustedError:
+                await db.rollback()
+                remaining = [
+                    c.get("label", "general")
+                    for c in clusters[index:]
+                    if c.get("cluster_id", -1) != -1
+                ]
+                logger.error(
+                    "LLM credits exhausted — stopping extraction. "
+                    "%d skill(s) already saved. Remaining clusters (%d): %s",
+                    len(skills),
+                    len(remaining),
+                    ", ".join(remaining),
+                )
+                break
             except Exception as exc:
+                # Discard any partially flushed rows for this cluster only;
+                # previously committed skills are unaffected.
+                await db.rollback()
                 logger.error(
                     "Failed to extract skill for cluster '%s': %s",
                     label,
