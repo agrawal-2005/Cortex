@@ -142,7 +142,10 @@ class SlackExportIngester:
         standalone: list[dict] = []
 
         for msg in messages:
-            if msg.get("subtype") in ("channel_join", "channel_leave", "channel_topic", "channel_purpose"):
+            if msg.get("subtype") in (
+                "channel_join", "channel_leave", "channel_topic", "channel_purpose",
+                "bot_message", "file_comment", "tombstone", "thread_broadcast",
+            ):
                 continue
             text = (msg.get("text") or "").strip()
             if not text and not msg.get("files"):
@@ -165,7 +168,7 @@ class SlackExportIngester:
         # Process standalone messages
         for msg in standalone:
             ts = msg.get("ts", "")
-            user_id = msg.get("user", "")
+            user_id = msg.get("user", "") or msg.get("username", msg.get("bot_id", "bot"))
             text = msg.get("text", "")
 
             # Handle file attachments
@@ -180,6 +183,11 @@ class SlackExportIngester:
             if attachment_texts:
                 full_content += "\n\n" + "\n\n".join(attachment_texts)
 
+            try:
+                created_at = datetime.fromtimestamp(float(ts), tz=timezone.utc) if ts else None
+            except (ValueError, OSError):
+                created_at = None
+
             documents.append({
                 "content": full_content,
                 "source_type": "slack",
@@ -189,7 +197,7 @@ class SlackExportIngester:
                 "channel_or_project": channel_name,
                 "author_name": self._get_user_name(user_id),
                 "author_role": self._get_user_role(user_id),
-                "created_at": datetime.fromtimestamp(float(ts), tz=timezone.utc) if ts else None,
+                "created_at": created_at,
             })
             self.stats["messages_processed"] += 1
 

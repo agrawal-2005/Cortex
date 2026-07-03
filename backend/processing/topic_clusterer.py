@@ -1,5 +1,6 @@
 """Topic clustering using HDBSCAN on document embeddings with LLM-based labeling."""
 
+import asyncio
 import logging
 import re
 from collections import Counter, defaultdict
@@ -97,6 +98,7 @@ class TopicClusterer:
             min_cluster_size=self.min_cluster_size,
             min_samples=self.min_samples,
             metric="euclidean",
+            core_dist_n_jobs=-1,
         )
         labels = clusterer.fit_predict(embeddings_array)
 
@@ -110,23 +112,58 @@ class TopicClusterer:
             }
             clusters_map[int(label)].append(doc_info)
 
-        # Label each cluster with the LLM
+        # Label each cluster
         results: list[dict[str, Any]] = []
         noise_docs = clusters_map.pop(-1, [])
+        cluster_items = sorted(clusters_map.items())
+        n_clusters = len(cluster_items)
+        use_llm = n_clusters <= 20
+        logger.info(
+            "Found %d clusters, using %s for labeling",
+            n_clusters,
+            "LLM" if use_llm else "word-frequency (>20 clusters)",
+        )
 
-        for cluster_id, docs in sorted(clusters_map.items()):
-            sample_texts = [d["text"][:200] for d in docs[:5]]
-            label = await self._label_cluster(sample_texts)
+        if use_llm:
+            # Concurrent LLM labeling with asyncio.gather
+            async def _label_one(cluster_id: int, docs: list[dict]) -> tuple:
+                sample_texts = [d["text"][:200] for d in docs[:5]]
+                label = await self._label_cluster(sample_texts)
+                return cluster_id, label, docs
 
-            results.append(
-                {
-                    "cluster_id": cluster_id,
-                    "label": label,
-                    "document_ids": [d["id"] for d in docs],
-                    "document_count": len(docs),
-                    "sample_texts": sample_texts[:3],
-                }
+            labeled = await asyncio.gather(
+                *[_label_one(cid, docs) for cid, docs in cluster_items],
+                return_exceptions=True,
             )
+
+            for item in labeled:
+                if isinstance(item, Exception):
+                    logger.warning("Cluster labeling failed: %s", item)
+                    continue
+                cluster_id, label, docs = item
+                results.append(
+                    {
+                        "cluster_id": cluster_id,
+                        "label": label,
+                        "document_ids": [d["id"] for d in docs],
+                        "document_count": len(docs),
+                        "sample_texts": [d["text"][:200] for d in docs[:3]],
+                    }
+                )
+        else:
+            # Fast word-frequency fallback for large cluster counts
+            for cluster_id, docs in cluster_items:
+                sample_texts = [d["text"][:200] for d in docs[:5]]
+                label = self._fallback_label(sample_texts)
+                results.append(
+                    {
+                        "cluster_id": cluster_id,
+                        "label": label,
+                        "document_ids": [d["id"] for d in docs],
+                        "document_count": len(docs),
+                        "sample_texts": sample_texts[:3],
+                    }
+                )
 
         if noise_docs:
             results.append(

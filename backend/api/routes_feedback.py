@@ -72,6 +72,20 @@ async def submit_feedback(
     await db.flush()
     await db.refresh(feedback)
 
+    # Update skill status based on feedback action
+    now = datetime.now(timezone.utc).replace(tzinfo=None).replace(tzinfo=None)
+    if payload.action == "approve":
+        skill.status = "verified"
+        skill.verified_by = payload.submitted_by
+        skill.verified_at = now
+    elif payload.action == "reject":
+        skill.status = "outdated"
+    elif payload.action == "edit":
+        skill.status = "review"
+        skill.version += 1
+
+    await db.flush()
+
     # Auto-update source trust scores
     await _update_source_trust(db, payload)
 
@@ -185,6 +199,6 @@ async def _update_source_trust(
             raw_score = (trust.times_approved + 0.5 * trust.times_cited) / total
             trust.trust_score = max(0.1, min(1.0, round(raw_score, 3)))
 
-        trust.last_updated = datetime.now(timezone.utc)
+        trust.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.flush()

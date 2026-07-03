@@ -1,0 +1,5 @@
+[
+  {"id": "U001", "name": "schen", "real_name": "Sarah Chen", "profile": {"title": "Support Team Lead"}},
+  {"id": "U002", "name": "mtorres", "real_name": "Mike Torres", "profile": {"title": "Senior Engineer"}},
+  {"id": "U003", "name": "akim", "real_name": "Alex Kim", "profile": {"title": "Solutions Architect"}}
+]

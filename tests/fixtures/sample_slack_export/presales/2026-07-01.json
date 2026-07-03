@@ -1,0 +1,7 @@
+[
+  {"type": "message", "user": "U003", "text": "Client onboarding checklist: 1. NDA signed 2. Technical requirements doc 3. API credentials provisioned 4. Kickoff call scheduled", "ts": "1751328600.000100"},
+  {"type": "message", "user": "U001", "text": "For enterprise clients, we need SOC2 compliance docs ready before the kickoff. Check with legal@company.com", "ts": "1751328660.000200"},
+  {"type": "message", "user": "U003", "text": "Typical onboarding timeline: Week 1 - Discovery, Week 2 - Integration, Week 3 - Testing, Week 4 - Go-live", "ts": "1751328720.000300"},
+  {"type": "message", "user": "U002", "text": "Make sure to add the client to our Datadog monitoring before go-live. The dashboard template is in Notion.", "ts": "1751328780.000400"},
+  {"type": "message", "user": "U003", "text": "If the client uses SSO, coordinate with IT team to set up SAML integration. Usually takes 2-3 days.", "ts": "1751328840.000500"}
+]

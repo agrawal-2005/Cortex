@@ -142,6 +142,14 @@ export default function SkillDetail() {
         submitted_by: submittedBy.trim() || undefined,
       });
 
+      // Refresh skill data (status may have changed)
+      try {
+        const skillRes = await getSkill(id);
+        setSkill(skillRes.data);
+      } catch {
+        // silently fail on refresh
+      }
+
       // Refresh feedback list
       try {
         const res = await getFeedbackHistory(id);
@@ -594,41 +602,74 @@ export default function SkillDetail() {
         <div className="rounded-lg border border-gray-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Feedback</h2>
 
-          {/* Quick action buttons */}
-          <div className="flex flex-wrap gap-3 mb-4">
-            <button
-              onClick={() => handleFeedbackAction('approve')}
-              disabled={submitting}
-              className="rounded-lg bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              {submitting && feedbackMode === null ? 'Approving...' : 'Approve'}
-            </button>
-            <button
-              onClick={() => handleFeedbackAction('edit')}
-              disabled={submitting}
-              className="rounded-lg bg-yellow-500 px-5 py-2 text-sm font-medium text-white hover:bg-yellow-600 disabled:opacity-50 transition-colors"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => handleFeedbackAction('reject')}
-              disabled={submitting}
-              className="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-            >
-              Reject
-            </button>
-          </div>
-
           {submitSuccess && (
             <div className="mb-4 rounded-lg bg-green-50 p-3 text-green-700 text-sm">
               Feedback submitted successfully.
             </div>
           )}
 
+          {/* Status-aware actions */}
+          {skill.status === 'verified' ? (
+            <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm font-semibold text-green-800">
+                  Verified{skill.verified_by ? ` by ${skill.verified_by}` : ''}
+                </span>
+              </div>
+              <p className="text-sm text-green-700 mb-3">This skill has been reviewed and approved.</p>
+              <button
+                onClick={() => handleFeedbackAction('reject')}
+                disabled={submitting}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-300 transition-colors"
+              >
+                Mark as Outdated
+              </button>
+            </div>
+          ) : skill.status === 'outdated' ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-semibold text-red-800 mb-2">This skill is outdated and needs re-extraction.</p>
+              <button
+                onClick={() => handleFeedbackAction('approve')}
+                disabled={submitting}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                Re-approve
+              </button>
+            </div>
+          ) : (
+            /* Draft or Review — show full action buttons */
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                onClick={() => handleFeedbackAction('approve')}
+                disabled={submitting}
+                className="rounded-lg bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {submitting && feedbackMode === null ? 'Approving...' : 'Approve'}
+              </button>
+              <button
+                onClick={() => handleFeedbackAction('edit')}
+                disabled={submitting}
+                className="rounded-lg bg-yellow-500 px-5 py-2 text-sm font-medium text-white hover:bg-yellow-600 disabled:opacity-50 transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleFeedbackAction('reject')}
+                disabled={submitting}
+                className="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          )}
+
           {/* Edit form */}
           {feedbackMode === 'edit' && (
             <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 space-y-3">
-              <h3 className="text-sm font-semibold text-yellow-800">Submit Edit Suggestion</h3>
+              <h3 className="text-sm font-semibold text-yellow-800">Edit: {skill.name}</h3>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Original Content
@@ -701,7 +742,7 @@ export default function SkillDetail() {
           {/* Reject form */}
           {feedbackMode === 'reject' && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
-              <h3 className="text-sm font-semibold text-red-800">Reject Skill</h3>
+              <h3 className="text-sm font-semibold text-red-800">Reject: {skill.name}</h3>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Reason for Rejection

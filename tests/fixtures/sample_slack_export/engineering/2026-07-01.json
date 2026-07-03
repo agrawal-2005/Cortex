@@ -1,0 +1,12 @@
+[
+  {"type": "message", "user": "U001", "text": "Reminder: all deployments must go through the CI/CD pipeline. No manual kubectl commands in production.", "ts": "1751328000.000100"},
+  {"type": "message", "user": "U002", "text": "When we get a P0 incident, first check the Grafana dashboard at grafana.internal/d/api-latency.", "ts": "1751328060.000200"},
+  {"type": "message", "user": "U001", "text": "How do we handle database migrations for the payments service?", "ts": "1751328120.000300", "thread_ts": "1751328120.000300"},
+  {"type": "message", "user": "U002", "text": "Step 1: Create migration with alembic revision. Step 2: Test on staging. Step 3: Run during maintenance window.", "ts": "1751328180.000400", "thread_ts": "1751328120.000300"},
+  {"type": "message", "user": "U003", "text": "Also make sure to backup the database before any migration. We got burned last quarter.", "ts": "1751328240.000500", "thread_ts": "1751328120.000300"},
+  {"subtype": "channel_join", "user": "U003", "text": "Alex Kim joined the channel", "ts": "1751328300.000600"},
+  {"type": "message", "user": "U002", "text": "New runbook for incident response attached", "ts": "1751328360.000700", "files": [{"id": "F001", "name": "runbook.pdf", "mimetype": "application/pdf", "url_private_download": "https://files.slack.com/runbook.pdf"}]},
+  {"type": "message", "user": "U003", "text": "The staging environment credentials are in 1Password vault 'Engineering Shared'.", "ts": "1751328420.000800"},
+  {"type": "message", "user": "U001", "text": "For hotfixes: create branch from main, get one approval, merge, deploy immediately. Skip the normal release cycle.", "ts": "1751328480.000900"},
+  {"type": "message", "user": "U002", "text": "", "ts": "1751328540.001000"}
+]

@@ -21,6 +21,15 @@ router = APIRouter(tags=["query"])
 _embedding_service = EmbeddingService()
 _vector_store = VectorStore()
 
+# Minimum relevance score (0-1) for a document to be considered a match.
+# Below this threshold, results are treated as "no match found".
+_RELEVANCE_THRESHOLD = 0.05
+
+_NO_MATCH_RESPONSE = (
+    "I don't have enough knowledge to answer that question yet. "
+    "Try ingesting more documents related to this topic, or rephrase your question."
+)
+
 
 @router.post(
     "/",
@@ -49,10 +58,10 @@ async def query_knowledge(
     if not hits:
         return QueryResponse(
             question=question,
-            readable_answer="No matching knowledge found for your question.",
+            readable_answer=_NO_MATCH_RESPONSE,
         )
 
-    # 3. Collect document IDs from vector-search hits
+    # 3. Score and filter hits by relevance threshold
     doc_ids: list[str] = []
     source_hits: list[QuerySourceHit] = []
 
@@ -62,6 +71,10 @@ async def query_knowledge(
         distance = hit.get("distance", 1.0)
         relevance = max(0.0, 1.0 - distance)  # cosine distance → relevance
         doc_text = hit.get("document", "")
+
+        # Skip low-relevance results
+        if relevance < _RELEVANCE_THRESHOLD:
+            continue
 
         if doc_id:
             doc_ids.append(doc_id)
@@ -73,6 +86,13 @@ async def query_knowledge(
                     relevance=round(relevance, 3),
                 )
             )
+
+    # No documents passed the relevance threshold
+    if not doc_ids:
+        return QueryResponse(
+            question=question,
+            readable_answer=_NO_MATCH_RESPONSE,
+        )
 
     # 4. Find skills whose steps cite any of these documents
     skill = await _find_best_skill(db, doc_ids)

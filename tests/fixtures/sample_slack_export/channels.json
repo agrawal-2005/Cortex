@@ -1,0 +1,4 @@
+[
+  {"id": "C001", "name": "engineering", "purpose": {"value": "Engineering discussions"}},
+  {"id": "C002", "name": "presales", "purpose": {"value": "Pre-sales support"}}
+]

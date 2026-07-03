@@ -90,12 +90,12 @@ function ChatMessage({ message }) {
           <p className="text-red-600">{message.content}</p>
         ) : (
           <>
-            {message.skill && (
+            {message.skillId && (
               <Link
-                to={`/skills/${message.skill}`}
+                to={`/skills/${message.skillId}`}
                 className="inline-block mb-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
               >
-                Skill: {message.skill}
+                {message.skillName || 'View Skill'}
               </Link>
             )}
 
@@ -146,7 +146,8 @@ export default function QueryPage() {
         {
           role: 'cortex',
           content: data.readable_answer || 'No answer found.',
-          skill: data.skill || null,
+          skillId: data.skill?.id || null,
+          skillName: data.skill?.name || null,
           sources: data.source_hits || [],
           confidence: data.confidence ?? null,
         },

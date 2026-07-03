@@ -15,7 +15,7 @@ const v1 = axios.create({
 // ── Skills ──────────────────────────────────────────────────────────────────
 
 export function getSkills(params = {}) {
-  return api.get('/skills', { params })
+  return api.get('/skills/', { params })
 }
 
 export function getSkill(id) {
@@ -27,7 +27,7 @@ export function getExecutableSkill(id) {
 }
 
 export function createSkill(data) {
-  return v1.post('/skills', data)
+  return v1.post('/skills/', data)
 }
 
 export function searchSkills(query) {
@@ -70,13 +70,13 @@ export function getIngestStatus(taskId) {
 // ── Query ───────────────────────────────────────────────────────────────────
 
 export function queryKnowledge(question) {
-  return api.post('/query', { question })
+  return api.post('/query/', { question })
 }
 
 // ── Feedback ────────────────────────────────────────────────────────────────
 
 export function submitFeedback(data) {
-  return api.post('/feedback', data)
+  return api.post('/feedback/', data)
 }
 
 export function getFeedbackHistory(skillId, params = {}) {

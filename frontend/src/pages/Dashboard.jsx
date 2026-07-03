@@ -79,7 +79,8 @@ export default function Dashboard() {
       map[dept] = [];
     }
     for (const skill of filtered) {
-      const dept = DEPARTMENTS.includes(skill.department) ? skill.department : 'General';
+      const normalized = (skill.department || '').charAt(0).toUpperCase() + (skill.department || '').slice(1);
+      const dept = DEPARTMENTS.includes(normalized) ? normalized : 'General';
       map[dept].push(skill);
     }
     return map;

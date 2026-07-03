@@ -30,7 +30,7 @@ router = APIRouter(tags=["skills"])
 )
 async def list_skills(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     status: str | None = Query(None, description="Filter: draft, review, verified, outdated"),
     department: str | None = Query(None, description="Filter by department"),
     min_confidence: float | None = Query(None, ge=0.0, le=1.0, description="Minimum confidence"),
