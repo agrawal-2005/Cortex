@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.database import get_db
-from backend.knowledge.models import Skill, SkillStep, StepSource
+from backend.knowledge.models import Skill, SkillDocument, SkillStep, StepSource
 from backend.processing.embedder import COLLECTION_NAME as DOC_COLLECTION
 from backend.processing.embeddings import EmbeddingService
 from backend.processing.renderer import render_skill_plain
@@ -25,7 +25,9 @@ _vector_store = VectorStore(collection_name=DOC_COLLECTION)
 
 # Minimum relevance score (0-1) for a document to be considered a match.
 # Below this threshold, results are treated as "no match found".
-_RELEVANCE_THRESHOLD = 0.05
+# Relevance equals cosine similarity (see distance conversion below), so
+# 0.25 keeps topically related hits and drops incidental word overlap.
+_RELEVANCE_THRESHOLD = 0.25
 
 _NO_MATCH_RESPONSE = (
     "I don't have enough knowledge to answer that question yet. "
@@ -64,14 +66,17 @@ async def query_knowledge(
         )
 
     # 3. Score and filter hits by relevance threshold
-    doc_ids: list[str] = []
+    doc_relevance: dict[str, float] = {}
     source_hits: list[QuerySourceHit] = []
 
     for hit in hits:
         meta = hit.get("metadata", {})
         doc_id = meta.get("document_id") or hit.get("id", "").removeprefix("doc-")
-        distance = hit.get("distance", 1.0)
-        relevance = max(0.0, 1.0 - distance)  # cosine distance → relevance
+        distance = hit.get("distance", 2.0)
+        # The collection uses ChromaDB's default squared-L2 metric and our
+        # embeddings are unit-normalized, so d = 2 - 2*cos_sim. Convert back:
+        # relevance = 1 - d/2 = cosine similarity (clamped to [0, 1]).
+        relevance = max(0.0, 1.0 - distance / 2.0)
         doc_text = hit.get("document", "")
 
         # Skip low-relevance results
@@ -79,7 +84,7 @@ async def query_knowledge(
             continue
 
         if doc_id:
-            doc_ids.append(doc_id)
+            doc_relevance[doc_id] = max(doc_relevance.get(doc_id, 0.0), relevance)
             source_hits.append(
                 QuerySourceHit(
                     document_id=doc_id,
@@ -90,14 +95,15 @@ async def query_knowledge(
             )
 
     # No documents passed the relevance threshold
-    if not doc_ids:
+    if not doc_relevance:
         return QueryResponse(
             question=question,
             readable_answer=_NO_MATCH_RESPONSE,
         )
 
-    # 4. Find skills whose steps cite any of these documents
-    skill = await _find_best_skill(db, doc_ids)
+    # 4. Map the matched documents back to the skill extracted from
+    #    their cluster (skill_documents), falling back to LLM citations.
+    skill = await _find_best_skill(db, doc_relevance)
 
     if skill is None:
         return QueryResponse(
@@ -123,13 +129,54 @@ async def query_knowledge(
 
 
 async def _find_best_skill(
-    db: AsyncSession, doc_ids: list[str]
+    db: AsyncSession, doc_relevance: dict[str, float]
 ) -> Skill | None:
-    """Find the skill with the most step-source citations to the given documents."""
-    if not doc_ids:
+    """Find the skill whose source cluster best matches the given documents.
+
+    Primary lookup: skill_documents — cluster-level provenance written at
+    extraction time, linking EVERY document of the source cluster to its
+    skill. Ranked by the highest-relevance matching document (so a skill
+    with one strong match beats a large cluster with several weak ones),
+    tie-broken by total relevance, then skill confidence.
+
+    Fallback: step_sources — the handful of documents the LLM explicitly
+    cited. Covers legacy skills extracted before skill_documents existed.
+    """
+    if not doc_relevance:
         return None
 
-    # Find step_sources that reference our documents
+    doc_ids = list(doc_relevance)
+
+    # ── Primary: cluster provenance (skill_documents) ──────────────────
+    result = await db.execute(
+        select(SkillDocument.skill_id, SkillDocument.document_id)
+        .where(SkillDocument.document_id.in_(doc_ids))
+    )
+    max_rel: dict[str, float] = {}
+    sum_rel: dict[str, float] = {}
+    for skill_id, doc_id in result.all():
+        rel = doc_relevance.get(doc_id, 0.0)
+        max_rel[skill_id] = max(max_rel.get(skill_id, 0.0), rel)
+        sum_rel[skill_id] = sum_rel.get(skill_id, 0.0) + rel
+
+    if max_rel:
+        result = await db.execute(
+            select(Skill)
+            .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
+            .where(Skill.id.in_(max_rel.keys()))
+        )
+        skills = result.scalars().all()
+        if skills:
+            return max(
+                skills,
+                key=lambda s: (
+                    max_rel.get(s.id, 0.0),
+                    sum_rel.get(s.id, 0.0),
+                    s.confidence,
+                ),
+            )
+
+    # ── Fallback: LLM-cited step_sources (legacy skills) ────────────────
     result = await db.execute(
         select(StepSource.step_id)
         .where(StepSource.document_id.in_(doc_ids))
@@ -140,7 +187,6 @@ async def _find_best_skill(
     if not step_ids:
         return None
 
-    # Find the skill(s) that own these steps
     result = await db.execute(
         select(SkillStep.skill_id)
         .where(SkillStep.id.in_(step_ids))
@@ -151,7 +197,6 @@ async def _find_best_skill(
     if not skill_ids:
         return None
 
-    # Load the highest-confidence skill
     result = await db.execute(
         select(Skill)
         .options(

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, JSON, Float, Boolean, Integer, ForeignKey
+from sqlalchemy import String, Text, JSON, Float, Boolean, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
@@ -92,6 +92,25 @@ class StepSource(Base):
     # Relationships
     step: Mapped["SkillStep"] = relationship(back_populates="sources")
     document: Mapped["Document"] = relationship(back_populates="step_sources")
+
+
+class SkillDocument(Base):
+    """Cluster-level provenance: every document in the source cluster a skill
+    was extracted from, not just the few the LLM cited in step_sources.
+
+    Lets the query route map any relevant document back to its skill.
+    """
+
+    __tablename__ = "skill_documents"
+    __table_args__ = (UniqueConstraint("skill_id", "document_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    skill_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("skills.id", ondelete="CASCADE"), index=True
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
 
 
 class Feedback(Base):

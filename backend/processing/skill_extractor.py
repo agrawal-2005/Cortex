@@ -34,6 +34,7 @@ from backend.knowledge.models import (
     Document,
     Feedback,
     Skill,
+    SkillDocument,
     SkillStep,
     SourceTrust,
     StepSource,
@@ -726,6 +727,14 @@ class SkillExtractionPipeline:
             db, parsed, doc_lookup, trust_scores, topic_label,
         )
 
+        # 7. Record cluster-level provenance: EVERY document in the source
+        # cluster links to this skill (not just the few cited in
+        # step_sources), so the query route can map any relevant document
+        # back to the skill extracted from its cluster.
+        for doc in documents:
+            db.add(SkillDocument(skill_id=skill.id, document_id=doc.id))
+        await db.flush()
+
         return skill
 
     async def extract_all_clusters(
@@ -738,7 +747,7 @@ class SkillExtractionPipeline:
         Args:
             db: Async database session.
             clusters: List of cluster dicts as returned by TopicClusterer,
-                      each with ``label``, ``document_ids``, ``cluster_id``.
+                      each with ``topic``, ``document_ids``, ``cluster_id``.
 
         Returns:
             List of persisted Skill objects.
@@ -756,7 +765,8 @@ class SkillExtractionPipeline:
                 logger.info("Skipping noise cluster")
                 continue
 
-            label = cluster.get("label", "general")
+            # TopicClusterer emits "topic"; accept "label" for compatibility.
+            label = cluster.get("topic") or cluster.get("label", "general")
             doc_ids = cluster.get("document_ids", [])
 
             # Strip the "doc-" prefix if IDs come from ChromaDB embedding IDs
@@ -781,7 +791,7 @@ class SkillExtractionPipeline:
             except LLMCreditsExhaustedError:
                 await db.rollback()
                 remaining = [
-                    c.get("label", "general")
+                    c.get("topic") or c.get("label", "general")
                     for c in clusters[index:]
                     if c.get("cluster_id", -1) != -1
                 ]
