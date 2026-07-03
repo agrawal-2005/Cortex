@@ -177,7 +177,7 @@ class MatchedDocument(BaseModel):
     """A relevant source document returned when no skill has been
     extracted for the topic yet."""
 
-    content_preview: str
+    preview: str
     source_type: str
     source_link: Optional[str] = None
     author: Optional[str] = None

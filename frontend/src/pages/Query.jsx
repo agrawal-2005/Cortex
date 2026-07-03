@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, Search, History, Loader2, ArrowRight, User, BrainCircuit, ExternalLink, Sparkles } from 'lucide-react'
+import { Send, History, Loader2, ArrowRight, User, ExternalLink, Sparkles } from 'lucide-react'
 import { queryKnowledge } from '../api/client'
 import { StatusBadge, DeptBadge, ConfidenceBar, Button } from '../components/Primitives'
 import SourceIcon from '../components/SourceIcon'
+import Logo from '../components/Logo'
 import { pct, confidenceColor } from '../lib/ui'
 
 const RECENT_KEY = 'cortex-recent-queries'
@@ -35,11 +36,9 @@ function MatchedDocuments({ readable_answer, matched_documents, suggestion }) {
               {doc.author && (
                 <span className="text-[10px] text-text-dim">by {doc.author}</span>
               )}
-              <span className="ml-auto text-[10px] font-semibold tabular-nums" style={{ color: confidenceColor(doc.relevance) }}>
-                {pct(doc.relevance)}
-              </span>
+              <ConfidenceBar value={doc.relevance} className="ml-auto w-24 shrink-0" />
             </div>
-            <p className="text-xs text-text-dim line-clamp-3">{doc.content_preview}</p>
+            <p className="text-xs text-text-dim line-clamp-3">{doc.preview}</p>
             {doc.source_link && (
               <a
                 href={doc.source_link}
@@ -183,9 +182,7 @@ export default function Query() {
         <div className="flex-1 overflow-y-auto space-y-5 pr-1">
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="w-14 h-14 rounded-2xl gradient-brand flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
-                <Search size={24} className="text-white" />
-              </div>
+              <Logo size={56} className="mb-4" />
               <h2 className="text-base font-semibold text-text">Ask the company brain</h2>
               <p className="text-sm text-text-dim mt-1.5 max-w-sm">
                 "How do we handle refunds over $500?" · "What's the deploy rollback process?"
@@ -206,9 +203,7 @@ export default function Query() {
               </div>
             ) : (
               <div key={i} className="flex items-start gap-2.5 max-w-[92%]">
-                <span className="w-7 h-7 rounded-full gradient-brand flex items-center justify-center shrink-0 mt-0.5">
-                  <BrainCircuit size={13} className="text-white" />
-                </span>
+                <Logo size={28} className="shrink-0 mt-0.5" />
                 <div className="card rounded-2xl rounded-tl-md px-4 py-3.5 flex-1">
                   {m.error ? (
                     <p className="text-sm text-danger">{m.error}</p>
@@ -221,9 +216,7 @@ export default function Query() {
           )}
           {busy && (
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-full gradient-brand flex items-center justify-center">
-                <BrainCircuit size={13} className="text-white" />
-              </span>
+              <Logo size={28} className="shrink-0" />
               <Loader2 size={15} className="text-primary animate-spin" />
               <span className="text-xs text-text-dim">Searching company knowledge…</span>
             </div>

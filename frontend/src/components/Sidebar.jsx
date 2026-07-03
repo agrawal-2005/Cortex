@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
 import {
-  BrainCircuit, LayoutDashboard, Search, ClipboardList,
+  LayoutDashboard, Search, ClipboardList,
   CheckCircle2, Plug, Settings,
 } from 'lucide-react'
+import Logo from './Logo'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -18,13 +19,8 @@ export default function Sidebar() {
     <aside className="fixed inset-y-0 left-0 z-40 w-16 md:w-60 bg-surface border-r border-border flex flex-col">
       {/* Logo */}
       <NavLink to="/" className="flex items-center gap-3 px-3 md:px-5 h-16 border-b border-border shrink-0">
-        <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center shrink-0 shadow-lg shadow-primary/30">
-          <BrainCircuit size={20} className="text-white" />
-        </div>
-        <div className="hidden md:block">
-          <span className="text-lg font-bold tracking-tight text-text">Cortex</span>
-          <p className="text-[10px] text-text-dim leading-tight -mt-0.5">Company Brain</p>
-        </div>
+        <Logo size={36} className="shrink-0" />
+        <span className="hidden md:block text-lg font-bold tracking-tight text-text">Cortex</span>
       </NavLink>
 
       {/* Navigation */}

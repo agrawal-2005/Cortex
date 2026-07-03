@@ -113,7 +113,7 @@ export default function Dashboard() {
       <header>
         <h1 className="text-2xl font-bold text-text">Dashboard</h1>
         <p className="text-sm text-text-dim mt-1">
-          Your company's knowledge, extracted and executable.
+          Extract how your company actually works. Turn it into workflows AI agents can run.
         </p>
       </header>
 

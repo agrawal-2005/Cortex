@@ -170,6 +170,122 @@ async def test_query_prefers_strong_match_over_big_weak_cluster(client, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_query_legacy_step_source_skill_beats_weaker_cluster_match(
+    client, monkeypatch
+):
+    """A legacy skill (provenance only in step_sources) that owns the MOST
+    relevant hit must beat a skill_documents skill with a weaker hit.
+    Previously any skill_documents match early-returned, so legacy skills
+    could never win (proxy/badge/benchmark queries all misrouted)."""
+    doc_strong, doc_weak = str(uuid.uuid4()), str(uuid.uuid4())
+    async with TestSessionLocal() as db:
+        await _seed_document(db, doc_strong)
+        await _seed_document(db, doc_weak)
+        legacy = await _seed_skill(db, "configure socks proxy", confidence=0.55)
+        step = SkillStep(
+            id=str(uuid.uuid4()),
+            skill_id=legacy.id,
+            step_order=1,
+            action="set the proxy env var",
+        )
+        db.add(step)
+        db.add(
+            StepSource(
+                id=str(uuid.uuid4()), step_id=step.id, document_id=doc_strong
+            )
+        )
+        big_cluster = await _seed_skill(db, "dev environment setup", confidence=0.9)
+        db.add(SkillDocument(skill_id=big_cluster.id, document_id=doc_weak))
+        await db.commit()
+
+    # strong: distance 0.2 -> relevance 0.9; weak: 1.2 -> 0.4
+    monkeypatch.setattr(
+        VectorStore,
+        "search",
+        lambda self, *a, **kw: [
+            _hit(doc_strong, distance=0.2),
+            _hit(doc_weak, distance=1.2),
+        ],
+    )
+
+    res = await client.post("/api/query/", json={"question": "configure proxy?"})
+    assert res.status_code == 200
+    assert res.json()["skill"]["name"] == "configure socks proxy"
+
+
+@pytest.mark.asyncio
+async def test_query_skill_similarity_breaks_document_near_ties(client, monkeypatch):
+    """When two skills own hits of similar relevance, the skill whose
+    name/description semantically matches the question wins — even if the
+    other skill's doc scores marginally higher. Encodes the live bug:
+    'How to report vulnerabilities?' hit a TUI-dialog PR at 0.51 and the
+    pentest-report cluster at 0.47, so the TUI skill misrouted the query."""
+    from backend.processing.embeddings import EmbeddingService
+
+    doc_tui, doc_pentest = str(uuid.uuid4()), str(uuid.uuid4())
+    async with TestSessionLocal() as db:
+        await _seed_document(db, doc_tui)
+        await _seed_document(db, doc_pentest)
+        tui = await _seed_skill(db, "sanitize text in TUI", confidence=0.9)
+        pentest = await _seed_skill(db, "generate pentest report", confidence=0.5)
+        db.add(SkillDocument(skill_id=tui.id, document_id=doc_tui))
+        db.add(SkillDocument(skill_id=pentest.id, document_id=doc_pentest))
+        await db.commit()
+
+    # Question embedding aligns with the pentest skill's text, is
+    # orthogonal to the TUI skill's text.
+    q_vec = [1.0] + [0.0] * 383
+    tui_vec = [0.0, 1.0] + [0.0] * 382
+
+    def fake_embed(self, text):
+        return q_vec  # the question itself
+
+    def fake_embed_batch(self, texts):
+        return [q_vec if "pentest" in t.lower() else tui_vec for t in texts]
+
+    monkeypatch.setattr(EmbeddingService, "generate_embedding", fake_embed)
+    monkeypatch.setattr(EmbeddingService, "generate_embeddings", fake_embed_batch)
+
+    # TUI doc slightly MORE relevant (0.51 vs 0.47) — sim must outweigh it.
+    monkeypatch.setattr(
+        VectorStore,
+        "search",
+        lambda self, *a, **kw: [
+            _hit(doc_tui, distance=0.98),      # relevance 0.51
+            _hit(doc_pentest, distance=1.06),  # relevance 0.47
+        ],
+    )
+
+    res = await client.post(
+        "/api/query/", json={"question": "How to report vulnerabilities?"}
+    )
+    assert res.status_code == 200
+    assert res.json()["skill"]["name"] == "generate pentest report"
+
+
+@pytest.mark.asyncio
+async def test_query_orphan_vector_hits_return_plain_no_match(client, monkeypatch):
+    """Vector hits whose document IDs have no Document row (stale
+    embeddings) must yield the plain no-match answer — never
+    'Here are the most relevant documents:' with zero documents."""
+    orphan_id = str(uuid.uuid4())  # deliberately NOT seeded in the DB
+
+    monkeypatch.setattr(
+        VectorStore, "search", lambda self, *a, **kw: [_hit(orphan_id)]
+    )
+
+    res = await client.post("/api/query/", json={"question": "deployment?"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["skill"] is None
+    assert data["matched_documents"] == []
+    assert "most relevant documents" not in data["readable_answer"]
+    assert data["readable_answer"].startswith(
+        "I don't have enough knowledge to answer that question yet."
+    )
+
+
+@pytest.mark.asyncio
 async def test_query_no_skill_returns_matched_documents(client, monkeypatch):
     """Docs match but no skill exists — return the documents themselves
     with preview/link/author/relevance plus an extraction suggestion."""
@@ -196,15 +312,16 @@ async def test_query_no_skill_returns_matched_documents(client, monkeypatch):
     assert res.status_code == 200
     data = res.json()
     assert data["skill"] is None
-    assert data["readable_answer"].startswith(
-        "No structured workflow has been extracted"
+    assert data["readable_answer"] == (
+        "No structured workflow exists for this topic yet. "
+        "Here are the most relevant documents:"
     )
     assert "Run skill extraction" in data["suggestion"]
 
     assert len(data["matched_documents"]) == 1
     doc = data["matched_documents"][0]
-    assert doc["content_preview"].startswith("Pin dependency versions")
-    assert len(doc["content_preview"]) == 200
+    assert doc["preview"].startswith("Pin dependency versions")
+    assert len(doc["preview"]) == 200
     assert doc["source_type"] == "github_pr"
     assert doc["source_link"] == "https://github.com/owner/repo/pull/42"
     assert doc["author"] == "sarah"
@@ -231,7 +348,7 @@ async def test_query_matched_documents_sorted_by_relevance(client, monkeypatch):
     assert [m["relevance"] for m in matched] == sorted(
         (m["relevance"] for m in matched), reverse=True
     )
-    assert matched[0]["content_preview"] == f"content of {doc_b}"
+    assert matched[0]["preview"] == f"content of {doc_b}"
 
 
 @pytest.mark.asyncio

@@ -507,3 +507,120 @@ class TestMinimumSteps:
         assert skills == []
         assert calls["count"] == 3
         assert await count_skills_in_db() == 0  # nothing bogus persisted
+
+
+# ── 11. Explicit nulls in otherwise-valid JSON ────────────────────────────
+# Live incident: cluster 'radarhere_dependabot_update' returned
+# "source_document_ids": null → "'NoneType' object is not iterable".
+# .get(key, default) does not cover keys present with a null value.
+
+class TestNullFields:
+    @pytest.mark.asyncio
+    async def test_null_optional_fields_do_not_crash(self, no_sleep):
+        await seed_documents(["alpha"])
+        nulled = json.loads(VALID_RESPONSE)
+        for step in nulled["steps"]:
+            step["source_document_ids"] = None
+            step["source_snippets"] = None
+            step["details"] = None
+        nulled["conditions"] = None
+        nulled["edge_cases"] = None
+        nulled["prerequisites"] = None
+        nulled["roles_involved"] = None
+        nulled["description"] = None
+        pipeline, calls = make_pipeline([json.dumps(nulled)])
+
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["alpha"], topic_label="null fields"
+            )
+            await db.commit()
+            skill_id = skill.id
+
+        assert await count_skills_in_db() == 1
+        async with TestSessionLocal() as session:
+            persisted = (
+                await session.execute(select(Skill).where(Skill.id == skill_id))
+            ).scalar_one()
+            assert persisted.description == ""
+            assert persisted.skill_data["conditions"] == []
+            # no citations → every step scored at base confidence
+            assert persisted.confidence == pytest.approx(0.40)
+
+    @pytest.mark.asyncio
+    async def test_null_name_falls_back_to_topic_label(self, no_sleep):
+        await seed_documents(["alpha"])
+        nulled = json.loads(VALID_RESPONSE)
+        nulled["name"] = None
+        pipeline, _ = make_pipeline([json.dumps(nulled)])
+
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["alpha"], topic_label="fallback label"
+            )
+            assert skill.name == "fallback label"
+
+
+# ── 12. Skills stay usable after a mid-run rollback ───────────────────────
+# Live incident: a 402 mid-run triggered db.rollback(), which expires ALL
+# session instances (even committed ones). The route then read skill.id
+# → sync lazy refresh → MissingGreenlet → HTTP 500 despite saved skills.
+
+class TestSkillsUsableAfterRollback:
+    @pytest.mark.asyncio
+    async def test_attributes_readable_after_402_rollback(self, no_sleep):
+        await seed_documents(["alpha", "beta"])
+        pipeline, _ = make_pipeline([
+            VALID_RESPONSE,
+            FakeHTTPError(402, "402 Client Error: Payment Required"),
+        ])
+        clusters = make_clusters(["alpha"], ["beta"])
+
+        async with TestSessionLocal() as db:
+            skills = await pipeline.extract_all_clusters(db, clusters)
+            # Without the reload fix this raises MissingGreenlet.
+            assert skills[0].id
+            assert skills[0].name == VALID_SKILL["name"]
+
+    @pytest.mark.asyncio
+    async def test_attributes_readable_after_failed_cluster_rollback(
+        self, no_sleep
+    ):
+        await seed_documents(["alpha", "beta"])
+        pipeline, _ = make_pipeline([
+            VALID_RESPONSE,
+            FakeHTTPError(500, "500 Server Error"),
+            FakeHTTPError(500, "500 Server Error"),
+            FakeHTTPError(500, "500 Server Error"),
+        ])
+        clusters = make_clusters(["alpha"], ["beta"])
+
+        async with TestSessionLocal() as db:
+            skills = await pipeline.extract_all_clusters(db, clusters)
+            assert len(skills) == 1
+            assert skills[0].name == VALID_SKILL["name"]
+
+    @pytest.mark.asyncio
+    async def test_extract_all_route_returns_partial_success_on_402(
+        self, no_sleep, client
+    ):
+        """The HTTP route must report the partial result, not 500."""
+        from unittest.mock import patch
+
+        await seed_documents(["alpha", "beta", "gamma"])
+        pipeline, _ = make_pipeline([
+            VALID_RESPONSE,
+            FakeHTTPError(402, "402 Client Error: Payment Required"),
+        ])
+        clusters = make_clusters(["alpha"], ["beta"], ["gamma"])
+
+        with patch(
+            "backend.processing.router.SkillExtractionPipeline",
+            return_value=pipeline,
+        ):
+            res = await client.post("/api/v1/processing/extract-all", json=clusters)
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["skills_extracted"] == 1
+        assert body["skills"][0]["name"] == VALID_SKILL["name"]

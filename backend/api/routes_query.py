@@ -115,15 +115,23 @@ async def query_knowledge(
 
     # 4. Map the matched documents back to the skill extracted from
     #    their cluster (skill_documents), falling back to LLM citations.
-    skill = await _find_best_skill(db, doc_relevance)
+    skill = await _find_best_skill(db, doc_relevance, query_embedding)
 
     if skill is None:
         matched = await _matched_documents(db, doc_relevance)
+        # Vector hits can reference documents that no longer exist in the
+        # database (stale embeddings). Without real documents to show,
+        # "here are the most relevant documents:" would render nothing.
+        if not matched:
+            return QueryResponse(
+                question=question,
+                readable_answer=_NO_MATCH_RESPONSE,
+            )
         return QueryResponse(
             question=question,
             readable_answer=(
-                "No structured workflow has been extracted for this topic "
-                "yet. However, I found relevant source documents:"
+                "No structured workflow exists for this topic yet. "
+                "Here are the most relevant documents:"
             ),
             source_hits=source_hits[:5],
             matched_documents=matched,
@@ -157,7 +165,7 @@ async def _matched_documents(
     docs = result.scalars().all()
     matched = [
         MatchedDocument(
-            content_preview=(doc.content or "")[:200],
+            preview=(doc.content or "")[:200],
             source_type=doc.source_type,
             source_link=doc.source_link,
             author=doc.author_name,
@@ -169,82 +177,93 @@ async def _matched_documents(
     return matched[:5]
 
 
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm = (sum(x * x for x in a) ** 0.5) * (sum(y * y for y in b) ** 0.5)
+    return dot / norm if norm else 0.0
+
+
 async def _find_best_skill(
-    db: AsyncSession, doc_relevance: dict[str, float]
+    db: AsyncSession,
+    doc_relevance: dict[str, float],
+    query_embedding: list[float],
 ) -> Skill | None:
-    """Find the skill whose source cluster best matches the given documents.
+    """Find the skill whose source documents best match the given hits.
 
-    Primary lookup: skill_documents — cluster-level provenance written at
-    extraction time, linking EVERY document of the source cluster to its
-    skill. Ranked by the highest-relevance matching document (so a skill
-    with one strong match beats a large cluster with several weak ones),
-    tie-broken by total relevance, then skill confidence.
+    Candidate skills come from BOTH provenance tables, merged into one
+    pool before ranking:
+      - skill_documents — cluster-level provenance written at extraction
+        time, linking EVERY document of the source cluster to its skill.
+      - step_sources — the handful of documents the LLM explicitly cited.
+        The only provenance for legacy skills extracted before
+        skill_documents existed; merging (rather than falling back) lets a
+        legacy skill that owns the MOST relevant hit beat a big cluster
+        of weakly relevant ones.
 
-    Fallback: step_sources — the handful of documents the LLM explicitly
-    cited. Covers legacy skills extracted before skill_documents existed.
+    Ranking blends two signals equally:
+      - the skill's own semantic similarity to the question (embedding
+        of "name. description"), and
+      - the highest-relevance matching document.
+    Document overlap alone cannot disambiguate: a skill owning one
+    slightly-stronger incidental hit would beat the skill that is
+    plainly *about* the question but whose docs score marginally lower
+    (e.g. "report vulnerabilities?" hitting a TUI-dialog PR at 0.51 vs
+    the pentest-report cluster at 0.47). Ties break on total relevance,
+    then confidence.
     """
     if not doc_relevance:
         return None
 
     doc_ids = list(doc_relevance)
 
-    # ── Primary: cluster provenance (skill_documents) ──────────────────
+    pairs: set[tuple[str, str]] = set()
+
     result = await db.execute(
         select(SkillDocument.skill_id, SkillDocument.document_id)
         .where(SkillDocument.document_id.in_(doc_ids))
     )
+    pairs.update((skill_id, doc_id) for skill_id, doc_id in result.all())
+
+    result = await db.execute(
+        select(SkillStep.skill_id, StepSource.document_id)
+        .join(SkillStep, SkillStep.id == StepSource.step_id)
+        .where(StepSource.document_id.in_(doc_ids))
+        .distinct()
+    )
+    pairs.update((skill_id, doc_id) for skill_id, doc_id in result.all())
+
+    if not pairs:
+        return None
+
     max_rel: dict[str, float] = {}
     sum_rel: dict[str, float] = {}
-    for skill_id, doc_id in result.all():
+    for skill_id, doc_id in pairs:
         rel = doc_relevance.get(doc_id, 0.0)
         max_rel[skill_id] = max(max_rel.get(skill_id, 0.0), rel)
         sum_rel[skill_id] = sum_rel.get(skill_id, 0.0) + rel
 
-    if max_rel:
-        result = await db.execute(
-            select(Skill)
-            .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
-            .where(Skill.id.in_(max_rel.keys()))
-        )
-        skills = result.scalars().all()
-        if skills:
-            return max(
-                skills,
-                key=lambda s: (
-                    max_rel.get(s.id, 0.0),
-                    sum_rel.get(s.id, 0.0),
-                    s.confidence,
-                ),
-            )
-
-    # ── Fallback: LLM-cited step_sources (legacy skills) ────────────────
-    result = await db.execute(
-        select(StepSource.step_id)
-        .where(StepSource.document_id.in_(doc_ids))
-        .distinct()
-    )
-    step_ids = [row[0] for row in result.all()]
-
-    if not step_ids:
-        return None
-
-    result = await db.execute(
-        select(SkillStep.skill_id)
-        .where(SkillStep.id.in_(step_ids))
-        .distinct()
-    )
-    skill_ids = [row[0] for row in result.all()]
-
-    if not skill_ids:
-        return None
-
     result = await db.execute(
         select(Skill)
-        .options(
-            selectinload(Skill.steps).selectinload(SkillStep.sources)
-        )
-        .where(Skill.id.in_(skill_ids))
-        .order_by(Skill.confidence.desc())
-        .limit(1)
+        .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
+        .where(Skill.id.in_(max_rel.keys()))
     )
-    return result.scalar_one_or_none()
+    skills = result.scalars().all()
+    if not skills:
+        return None
+
+    skill_embeddings = _embedding_service.generate_embeddings(
+        [f"{s.name}. {s.description or ''}" for s in skills]
+    )
+    sim = {
+        s.id: _cosine(query_embedding, emb)
+        for s, emb in zip(skills, skill_embeddings)
+    }
+
+    return max(
+        skills,
+        key=lambda s: (
+            0.5 * sim.get(s.id, 0.0) + 0.5 * max_rel.get(s.id, 0.0),
+            sum_rel.get(s.id, 0.0),
+            s.confidence,
+        ),
+    )

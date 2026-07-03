@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1.5 -1.5 83 83" role="img" aria-label="Cortex">
+  <rect x="0" y="0" width="80" height="80" rx="18" fill="none" stroke="#6C5CE7" stroke-width="2"/>
+  <path d="M22,22 L22,40 L40,40" fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58,22 L58,32 L40,32 L40,40" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22,58 L30,58 L30,48 L40,48 L40,40" fill="none" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+  <path d="M58,58 L50,58 L50,48 L40,48" fill="none" stroke="#00D2FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+  <circle cx="22" cy="22" r="3.5" fill="#6C5CE7"/>
+  <circle cx="58" cy="22" r="3.5" fill="#00D2FF"/>
+  <circle cx="22" cy="58" r="3.5" fill="#6C5CE7" opacity="0.65"/>
+  <circle cx="58" cy="58" r="3.5" fill="#00D2FF" opacity="0.65"/>
+  <circle cx="40" cy="40" r="6" fill="#6C5CE7"/>
+</svg>

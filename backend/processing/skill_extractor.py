@@ -523,7 +523,9 @@ class SkillExtractionPipeline:
         - Evidence type:       up to 0.10  (jira > docs > chat)
         - Corroboration:       up to 0.05  (multiple sources agree)
         """
-        cited_ids: list[str] = step_data.get("source_document_ids", [])
+        # LLMs sometimes emit explicit nulls ("source_document_ids": null);
+        # .get() with a default does not cover that, so coalesce with `or`.
+        cited_ids: list[str] = step_data.get("source_document_ids") or []
         cited_docs = [doc_lookup[did] for did in cited_ids if did in doc_lookup]
 
         if not cited_docs:
@@ -592,17 +594,19 @@ class SkillExtractionPipeline:
         status = "review" if needs_review else "draft"
 
         # --- Build skill_data (the full executable payload) ---
+        # `or` coalescing throughout: the LLM may emit explicit nulls for
+        # any of these fields, which .get() defaults do not cover.
         skill_data = {
-            "conditions": parsed.get("conditions", []),
-            "edge_cases": parsed.get("edge_cases", []),
-            "prerequisites": parsed.get("prerequisites", []),
-            "roles_involved": parsed.get("roles_involved", []),
+            "conditions": parsed.get("conditions") or [],
+            "edge_cases": parsed.get("edge_cases") or [],
+            "prerequisites": parsed.get("prerequisites") or [],
+            "roles_involved": parsed.get("roles_involved") or [],
         }
 
         skill = Skill(
             id=str(uuid.uuid4()),
-            name=parsed.get("name", topic_label),
-            description=parsed.get("description", ""),
+            name=parsed.get("name") or topic_label,
+            description=parsed.get("description") or "",
             department=parsed.get("department"),
             status=status,
             confidence=round(overall_confidence, 3),
@@ -618,8 +622,8 @@ class SkillExtractionPipeline:
                 id=str(uuid.uuid4()),
                 skill_id=skill.id,
                 step_order=step_data.get("step_order", idx + 1),
-                action=step_data.get("action", ""),
-                details=step_data.get("details", {}),
+                action=step_data.get("action") or "",
+                details=step_data.get("details") or {},
                 confidence=step_confidences[idx] if idx < len(step_confidences) else 0.0,
                 depends_on=[],
             )
@@ -627,8 +631,8 @@ class SkillExtractionPipeline:
             await db.flush()
 
             # Link each cited document as a StepSource
-            cited_ids = step_data.get("source_document_ids", [])
-            snippets = step_data.get("source_snippets", [])
+            cited_ids = step_data.get("source_document_ids") or []
+            snippets = step_data.get("source_snippets") or []
 
             for src_idx, doc_id in enumerate(cited_ids):
                 if doc_id not in doc_lookup:
@@ -773,6 +777,12 @@ class SkillExtractionPipeline:
         clusters remain unprocessed.
         """
         skills: list[Skill] = []
+        # session.rollback() (after a failed cluster or a 402) expires ALL
+        # instances in the session — including previously committed skills.
+        # Attribute access on an expired instance triggers synchronous lazy
+        # IO, which raises MissingGreenlet under an async session. Capture
+        # IDs eagerly and reload fresh rows before returning.
+        skill_ids: list[str] = []
 
         for index, cluster in enumerate(clusters):
             cluster_id = cluster.get("cluster_id", -1)
@@ -800,6 +810,7 @@ class SkillExtractionPipeline:
                     topic_label=label,
                 )
                 skills.append(skill)
+                skill_ids.append(skill.id)
                 # Commit per cluster — each skill cost an LLM call and must
                 # survive failures in later clusters.
                 await db.commit()
@@ -827,6 +838,13 @@ class SkillExtractionPipeline:
                     label,
                     exc,
                 )
+
+        # Reload fresh instances — any rollback above expired the originals.
+        if skill_ids:
+            result = await db.execute(
+                select(Skill).where(Skill.id.in_(skill_ids))
+            )
+            skills = list(result.scalars().all())
 
         logger.info("Extracted %d skills from %d clusters", len(skills), len(clusters))
         return skills
