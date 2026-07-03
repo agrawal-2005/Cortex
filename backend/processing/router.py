@@ -79,10 +79,12 @@ async def extract_skill_from_cluster(
         topic_label=topic_label,
     )
 
+    await db.commit()
+
     # Reload with relationships for rendering
     result = await db.execute(
         select(Skill)
-        .options(selectinload(Skill.steps))
+        .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
         .where(Skill.id == skill.id)
     )
     skill = result.scalar_one()
@@ -102,11 +104,15 @@ async def extract_all_from_clusters(
     pipeline = SkillExtractionPipeline()
     skills = await pipeline.extract_all_clusters(db=db, clusters=clusters)
 
+    # Commit immediately so extracted skills survive any rendering error —
+    # each one may have cost an LLM call.
+    await db.commit()
+
     # Reload with relationships for rendering
     skill_ids = [s.id for s in skills]
     result = await db.execute(
         select(Skill)
-        .options(selectinload(Skill.steps))
+        .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
         .where(Skill.id.in_(skill_ids))
     )
     loaded_skills = result.scalars().all()

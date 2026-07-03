@@ -1,7 +1,9 @@
-"""Ingestion API routes — Slack ZIP upload, file upload, status tracking."""
+"""Ingestion API routes — Slack ZIP upload, Discord, file upload, status tracking."""
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import shutil
 import tempfile
@@ -11,12 +13,21 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import get_db
+from backend.database import async_session_factory, get_db
+from backend.ingestion.discord_ingester import DiscordIngester
 from backend.ingestion.file_upload_ingester import FileUploadIngester
+from backend.ingestion.github_ingester import GitHubIngester
 from backend.ingestion.slack_ingester import SlackExportIngester
-from backend.schemas import IngestStatusResponse
+from backend.models import Document
+from backend.schemas import (
+    DiscordLiveIngestRequest,
+    DocumentCreate,
+    GitHubIngestRequest,
+    IngestStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +154,179 @@ async def ingest_file(
         raise HTTPException(status_code=400, detail=result.get("detail", "Unknown error"))
 
     return result
+
+
+# ── POST /github — GitHub repository ingestion ────────────────────────────
+
+
+async def _run_github_ingest(task_id: str, payload: GitHubIngestRequest) -> None:
+    """Background worker: fetch from GitHub, store documents, track progress."""
+    ingester = GitHubIngester(
+        repo=payload.repo,
+        token=payload.token,
+        months=payload.months,
+        max_requests=payload.max_requests,
+        include_comments=payload.include_comments,
+    )
+    try:
+        docs = await ingester.ingest()
+        _set_task(
+            task_id,
+            status="running",
+            progress={"stage": "storing", "documents_fetched": len(docs)},
+        )
+        async with async_session_factory() as db:
+            ingested = await _store_documents(docs, db)
+            await db.commit()
+        _set_task(
+            task_id,
+            status="completed",
+            progress={
+                "documents_ingested": ingested,
+                "stats": ingester.stats,
+            },
+        )
+        logger.info(
+            "GitHub ingestion task %s completed: %d docs stored (%s)",
+            task_id, ingested, ingester.stats,
+        )
+    except Exception as exc:
+        logger.error("GitHub ingestion task %s failed: %s", task_id, exc)
+        _set_task(task_id, status="failed", error=str(exc))
+
+
+@router.post(
+    "/github",
+    response_model=IngestStatusResponse,
+    status_code=202,
+    summary="Ingest a GitHub repository (background task)",
+    description=(
+        "Pulls issues, PRs, discussions, and docs from a public GitHub "
+        "repo (owner/repo) via the REST API and stores them as Documents. "
+        "Runs in the background — poll GET /status?task_id=... for progress. "
+        "An optional token (or GITHUB_TOKEN env var) raises the rate limit."
+    ),
+)
+async def ingest_github_repo(payload: GitHubIngestRequest) -> IngestStatusResponse:
+    if "/" not in payload.repo:
+        raise HTTPException(
+            status_code=400, detail="repo must be in 'owner/repo' form."
+        )
+    task_id = str(uuid.uuid4())
+    _set_task(task_id, status="running", progress={"stage": "fetching"})
+    asyncio.create_task(_run_github_ingest(task_id, payload))
+    return IngestStatusResponse(**_tasks[task_id])
+
+
+# ── POST /discord/* — Discord ingestion ──────────────────────────────────
+
+
+async def _store_documents(
+    docs: list[DocumentCreate], db: AsyncSession
+) -> int:
+    """Store documents, skipping ones already ingested (same source_type +
+    source_id) so that re-syncing a source doesn't create duplicates."""
+    if not docs:
+        return 0
+    source_ids = {d.source_id for d in docs if d.source_id}
+    existing: set[tuple[str, str]] = set()
+    if source_ids:
+        result = await db.execute(
+            select(Document.source_type, Document.source_id).where(
+                Document.source_id.in_(source_ids)
+            )
+        )
+        existing = {tuple(row) for row in result.all()}
+    stored = 0
+    for payload in docs:
+        if payload.source_id and (payload.source_type, payload.source_id) in existing:
+            continue
+        db.add(Document(**payload.model_dump()))
+        stored += 1
+    if stored:
+        await db.flush()
+    return stored
+
+
+@router.post(
+    "/discord/upload",
+    summary="Upload a DiscordChatExporter JSON export",
+    description=(
+        "Accepts a `.json` file produced by DiscordChatExporter "
+        "(an object with `guild`, `channel`, and `messages` keys) and "
+        "ingests each message as a Document with `source_type='discord'`."
+    ),
+)
+async def ingest_discord_export(
+    file: UploadFile = File(..., description="DiscordChatExporter .json file"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    filename = file.filename or ""
+    if not filename.endswith(".json"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only .json files are accepted for Discord export ingestion.",
+        )
+
+    try:
+        raw = await file.read()
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}")
+
+    ingester = DiscordIngester(download_attachments=False)
+    try:
+        docs = await ingester.parse_export(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    ingested = await _store_documents(docs, db)
+    return {
+        "status": "success",
+        "documents_ingested": ingested,
+        "stats": ingester.stats,
+    }
+
+
+@router.post(
+    "/discord/live",
+    summary="Ingest Discord channels via bot token",
+    description=(
+        "Connects to the Discord REST API with a bot token (from the "
+        "request body or the DISCORD_BOT_TOKEN env var) and ingests "
+        "messages from the given channels, including threads."
+    ),
+)
+async def ingest_discord_live(
+    payload: DiscordLiveIngestRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    ingester = DiscordIngester(
+        bot_token=payload.bot_token,
+        guild_id=payload.guild_id,
+        channel_ids=payload.channel_ids,
+        max_messages_per_channel=payload.max_messages_per_channel,
+    )
+    if not ingester.bot_token:
+        raise HTTPException(
+            status_code=400,
+            detail="No Discord bot token: provide bot_token or set DISCORD_BOT_TOKEN.",
+        )
+
+    try:
+        docs = await ingester.ingest()
+    except ConnectionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        logger.error("Discord live ingestion failed: %s", exc)
+        raise HTTPException(status_code=502, detail=f"Discord ingestion failed: {exc}")
+
+    ingested = await _store_documents(docs, db)
+    return {
+        "status": "success",
+        "documents_ingested": ingested,
+        "stats": ingester.stats,
+    }
 
 
 # ── GET /status — Check ingestion progress ────────────────────────────────

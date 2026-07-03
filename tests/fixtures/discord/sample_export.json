@@ -1,0 +1,148 @@
+{
+  "guild": {
+    "id": "111111111111111111",
+    "name": "Cortex HQ",
+    "iconUrl": "https://cdn.discordapp.com/icons/111111111111111111/abc.png"
+  },
+  "channel": {
+    "id": "222222222222222222",
+    "type": "GuildTextChat",
+    "categoryId": "333333333333333333",
+    "category": "Team",
+    "name": "engineering",
+    "topic": "Engineering discussion"
+  },
+  "dateRange": {
+    "after": null,
+    "before": null
+  },
+  "messages": [
+    {
+      "id": "1001",
+      "type": "Default",
+      "timestamp": "2026-05-01T10:00:00.000+00:00",
+      "timestampEdited": null,
+      "content": "How do we roll back a bad deploy to production?",
+      "author": {
+        "id": "9001",
+        "name": "sarah",
+        "discriminator": "0000",
+        "nickname": "Sarah Chen",
+        "isBot": false
+      },
+      "attachments": [],
+      "embeds": [],
+      "reactions": [],
+      "mentions": []
+    },
+    {
+      "id": "1002",
+      "type": "Reply",
+      "timestamp": "2026-05-01T10:05:00.000+00:00",
+      "timestampEdited": null,
+      "content": "Use `make rollback` — it reverts to the previous image tag and runs the smoke tests.",
+      "author": {
+        "id": "9002",
+        "name": "mike",
+        "discriminator": "0000",
+        "nickname": null,
+        "isBot": false
+      },
+      "attachments": [],
+      "embeds": [],
+      "reactions": [],
+      "mentions": [],
+      "reference": {
+        "messageId": "1001",
+        "channelId": "222222222222222222",
+        "guildId": "111111111111111111"
+      }
+    },
+    {
+      "id": "1003",
+      "type": "Default",
+      "timestamp": "2026-05-01T10:06:00.000+00:00",
+      "timestampEdited": null,
+      "content": "",
+      "author": {
+        "id": "9003",
+        "name": "deploybot",
+        "discriminator": "0000",
+        "nickname": null,
+        "isBot": true
+      },
+      "attachments": [],
+      "embeds": [
+        {
+          "title": "Deploy rolled back",
+          "description": "api-server reverted to v2.14.1 by mike",
+          "url": null
+        }
+      ],
+      "reactions": [],
+      "mentions": []
+    },
+    {
+      "id": "1004",
+      "type": "Default",
+      "timestamp": "2026-05-01T10:10:00.000+00:00",
+      "timestampEdited": null,
+      "content": "",
+      "author": {
+        "id": "9001",
+        "name": "sarah",
+        "discriminator": "0000",
+        "nickname": "Sarah Chen",
+        "isBot": false
+      },
+      "attachments": [
+        {
+          "id": "5001",
+          "url": "https://cdn.discordapp.com/attachments/222222222222222222/5001/runbook.txt",
+          "fileName": "runbook.txt",
+          "fileSizeBytes": 1024
+        }
+      ],
+      "embeds": [],
+      "reactions": [],
+      "mentions": []
+    },
+    {
+      "id": "1005",
+      "type": "Default",
+      "timestamp": "2026-05-01T10:11:00.000+00:00",
+      "timestampEdited": null,
+      "content": "",
+      "author": {
+        "id": "9002",
+        "name": "mike",
+        "discriminator": "0000",
+        "nickname": null,
+        "isBot": false
+      },
+      "attachments": [],
+      "embeds": [],
+      "reactions": [],
+      "mentions": []
+    },
+    {
+      "id": "1006",
+      "type": "ThreadCreated",
+      "timestamp": "2026-05-01T10:12:00.000+00:00",
+      "timestampEdited": null,
+      "content": "started a thread: incident-2026-05-01",
+      "author": {
+        "id": "9002",
+        "name": "mike",
+        "discriminator": "0000",
+        "nickname": null,
+        "isBot": false
+      },
+      "attachments": [],
+      "embeds": [],
+      "reactions": [],
+      "mentions": []
+    }
+  ],
+  "messageCount": 6
+}

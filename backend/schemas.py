@@ -181,6 +181,27 @@ class QueryResponse(BaseModel):
     confidence: float = 0.0
 
 
+# --- GitHub ingestion schemas ---
+
+
+class GitHubIngestRequest(BaseModel):
+    repo: str  # "owner/repo"
+    token: Optional[str] = None  # falls back to GITHUB_TOKEN env var
+    months: int = 6
+    max_requests: Optional[int] = None  # default: 55 unauthenticated, 4000 with token
+    include_comments: bool = True
+
+
+# --- Discord ingestion schemas ---
+
+
+class DiscordLiveIngestRequest(BaseModel):
+    guild_id: str
+    channel_ids: list[str]
+    bot_token: Optional[str] = None  # falls back to DISCORD_BOT_TOKEN env var
+    max_messages_per_channel: int = 1000
+
+
 # --- Ingestion status schemas ---
 
 

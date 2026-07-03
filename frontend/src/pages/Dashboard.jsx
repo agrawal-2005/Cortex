@@ -1,211 +1,306 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getSkills } from '../api/client';
-import StatusBadge from '../components/StatusBadge';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  ClipboardList, FileText, Plug, Gauge, ArrowRight,
+  Sparkles, Inbox, AlertTriangle,
+} from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts'
+import { getSkills, getDocuments } from '../api/client'
+import { Skeleton, SkeletonCard, EmptyState, StatusBadge, ConfidenceBar, Button } from '../components/Primitives'
+import SourceIcon from '../components/SourceIcon'
+import { confidenceColor, pct, timeAgo } from '../lib/ui'
 
-const DEPARTMENTS = ['Engineering', 'Support', 'Operations', 'Sales', 'HR', 'General'];
-const STATUSES = ['all', 'draft', 'review', 'verified', 'outdated'];
+const DEPT_COLORS = ['#6C5CE7', '#00D2FF', '#00E676', '#FFB300', '#FF79C6', '#8888A0']
 
-function ConfidenceBar({ score }) {
-  const pct = Math.round((score ?? 0) * 100);
-  let barColor = 'bg-red-500';
-  if (score > 0.8) barColor = 'bg-emerald-500';
-  else if (score > 0.5) barColor = 'bg-yellow-500';
-
+function StatCard({ icon: Icon, label, value, sub, accent = 'text-primary' }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${barColor} transition-all`}
-          style={{ width: `${pct}%` }}
-        />
+    <div className="card card-hover p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-text-dim uppercase tracking-wider">{label}</p>
+        <Icon size={16} className={accent} />
       </div>
-      <span className="text-xs font-medium text-slate-500 tabular-nums w-8 text-right">
-        {pct}%
-      </span>
+      <p className="text-3xl font-bold text-text mt-2 tabular-nums">{value}</p>
+      <div className="text-xs text-text-dim mt-1.5">{sub}</div>
     </div>
-  );
+  )
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const [skills, setSkills] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [search, setSearch] = useState('');
+  const [skills, setSkills] = useState(null)
+  const [documents, setDocuments] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await getSkills({ limit: 200 });
-        const data = res.data;
-        if (Array.isArray(data)) {
-          setSkills(data);
-        } else if (data && Array.isArray(data.items)) {
-          setSkills(data.items);
-        } else if (data && Array.isArray(data.skills)) {
-          setSkills(data.skills);
-        } else {
-          setSkills([]);
-        }
-      } catch {
-        setError('Failed to load skills.');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+    Promise.all([
+      getSkills({ limit: 100 }),
+      getDocuments({ limit: 100 }),
+    ])
+      .then(([skillsRes, docsRes]) => {
+        setSkills(skillsRes.data.items || skillsRes.data.skills || [])
+        setDocuments(Array.isArray(docsRes.data) ? docsRes.data : docsRes.data.items || [])
+      })
+      .catch((e) => setError(e.message))
+  }, [])
 
-  const filtered = useMemo(() => {
-    let result = skills;
-    if (statusFilter !== 'all') {
-      result = result.filter((s) => s.status === statusFilter);
+  const stats = useMemo(() => {
+    if (!skills || !documents) return null
+    const verified = skills.filter((s) => s.status === 'verified').length
+    const inReview = skills.filter((s) => s.status === 'review' || s.status === 'draft').length
+    const avgConf = skills.length
+      ? skills.reduce((acc, s) => acc + (s.confidence || 0), 0) / skills.length
+      : 0
+    // Dedupe github_issue / github_pr / github_doc etc. down to one source key
+    const sourceKeys = [...new Set(documents.map((d) => (d.source_type || '').split('_')[0]))]
+    const byDept = {}
+    for (const s of skills) {
+      const dept = s.department || 'general'
+      byDept[dept] = (byDept[dept] || 0) + 1
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter((s) => s.name?.toLowerCase().includes(q));
-    }
-    return result;
-  }, [skills, statusFilter, search]);
+    const deptData = Object.entries(byDept)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+    return { verified, inReview, avgConf, sourceKeys, deptData }
+  }, [skills, documents])
 
-  const grouped = useMemo(() => {
-    const map = {};
-    for (const dept of DEPARTMENTS) {
-      map[dept] = [];
-    }
-    for (const skill of filtered) {
-      const normalized = (skill.department || '').charAt(0).toUpperCase() + (skill.department || '').slice(1);
-      const dept = DEPARTMENTS.includes(normalized) ? normalized : 'General';
-      map[dept].push(skill);
-    }
-    return map;
-  }, [filtered]);
+  const needsReview = useMemo(
+    () =>
+      (skills || [])
+        .filter((s) => s.status === 'draft' || s.status === 'review')
+        .sort((a, b) => (a.confidence || 0) - (b.confidence || 0))
+        .slice(0, 4),
+    [skills],
+  )
 
-  const totalSkills = skills.length;
-  const verifiedCount = skills.filter((s) => s.status === 'verified').length;
-  const avgConfidence =
-    skills.length > 0
-      ? skills.reduce((sum, s) => sum + (s.confidence ?? 0), 0) / skills.length
-      : 0;
+  const activity = useMemo(() => {
+    if (!skills || !documents) return []
+    const items = [
+      ...skills.map((s) => ({
+        key: `skill-${s.id}`,
+        icon: Sparkles,
+        text: `Skill extracted: ${s.name}`,
+        time: s.extracted_at,
+        link: `/skills/${s.id}`,
+      })),
+      ...documents.slice(0, 20).map((d) => ({
+        key: `doc-${d.id}`,
+        sourceType: d.source_type,
+        text: `Ingested from ${d.channel_or_project || d.source_type}${d.author_name ? ` · ${d.author_name}` : ''}`,
+        time: d.ingested_at,
+      })),
+    ]
+    return items
+      .filter((i) => i.time)
+      .sort((a, b) => new Date(b.time) - new Date(a.time))
+      .slice(0, 8)
+  }, [skills, documents])
 
-  if (loading) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <LoadingSpinner />
-      </div>
-    );
+      <EmptyState
+        icon={AlertTriangle}
+        title="Could not load dashboard"
+        message={`The API returned an error: ${error}. Is the backend running on port 8000?`}
+      />
+    )
   }
 
+  const loading = !stats
+
   return (
-    <div>
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Company Knowledge Base</h1>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200">
-            {totalSkills} skills
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-            {verifiedCount} verified
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-200">
-            {(avgConfidence * 100).toFixed(0)}% avg confidence
-          </span>
-        </div>
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-2xl font-bold text-text">Dashboard</h1>
+        <p className="text-sm text-text-dim mt-1">
+          Your company's knowledge, extracted and executable.
+        </p>
+      </header>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)
+        ) : (
+          <>
+            <StatCard
+              icon={ClipboardList}
+              label="Total Skills"
+              value={skills.length}
+              sub={
+                <span>
+                  <span className="text-success">{stats.verified} verified</span>
+                  {' · '}
+                  <span className="text-warning">{stats.inReview} in review</span>
+                </span>
+              }
+            />
+            <StatCard
+              icon={FileText}
+              label="Documents Ingested"
+              value={documents.length >= 100 ? '100+' : documents.length}
+              sub="across all sources"
+              accent="text-secondary"
+            />
+            <StatCard
+              icon={Plug}
+              label="Data Sources"
+              value={stats.sourceKeys.length}
+              sub={
+                stats.sourceKeys.length ? (
+                  <span className="flex items-center gap-1.5 mt-0.5">
+                    {stats.sourceKeys.slice(0, 5).map((t) => (
+                      <SourceIcon key={t} name={t} size={13} />
+                    ))}
+                    <span>connected</span>
+                  </span>
+                ) : (
+                  'none connected yet'
+                )
+              }
+              accent="text-success"
+            />
+            <StatCard
+              icon={Gauge}
+              label="Avg Confidence"
+              value={
+                <span style={{ color: confidenceColor(stats.avgConf) }}>
+                  {pct(stats.avgConf)}
+                </span>
+              }
+              sub="across all skills"
+              accent="text-warning"
+            />
+          </>
+        )}
       </div>
 
-      {error && (
-        <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-          {error}
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Skills by department */}
+        <section className="card p-5 lg:col-span-3">
+          <h2 className="text-sm font-semibold text-text mb-4">Skills by Department</h2>
+          {loading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : stats.deptData.length === 0 ? (
+            <EmptyState
+              icon={Sparkles}
+              title="No skills yet"
+              message="Connect a data source and Cortex will start extracting skills."
+              action={
+                <Link to="/sources">
+                  <Button variant="primary">Connect a source <ArrowRight size={14} /></Button>
+                </Link>
+              }
+            />
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(160, stats.deptData.length * 44)}>
+              <BarChart data={stats.deptData} layout="vertical" margin={{ left: 8, right: 24 }}>
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={100}
+                  tick={{ fill: '#8888A0', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: '#1E1E2E55' }}
+                  contentStyle={{
+                    background: '#12121A',
+                    border: '1px solid #1E1E2E',
+                    borderRadius: 8,
+                    color: '#E8E8ED',
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={18}>
+                  {stats.deptData.map((_, i) => (
+                    <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </section>
+
+        {/* Recent activity */}
+        <section className="card p-5 lg:col-span-2">
+          <h2 className="text-sm font-semibold text-text mb-4">Recent Activity</h2>
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+            </div>
+          ) : activity.length === 0 ? (
+            <p className="text-sm text-text-dim py-6 text-center">
+              No activity yet. Ingest some data to get started.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {activity.map((item) => {
+                const Icon = item.icon
+                const row = (
+                  <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-surface-2 transition-colors">
+                    <span className="w-7 h-7 rounded-lg bg-bg border border-border flex items-center justify-center shrink-0">
+                      {Icon ? <Icon size={13} className="text-primary" /> : <SourceIcon name={item.sourceType} size={13} />}
+                    </span>
+                    <span className="text-[13px] text-text truncate flex-1">{item.text}</span>
+                    <span className="text-[11px] text-text-dim shrink-0">{timeAgo(item.time)}</span>
+                  </div>
+                )
+                return (
+                  <li key={item.key}>
+                    {item.link ? <Link to={item.link}>{row}</Link> : row}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* Skills needing review */}
+      {!loading && needsReview.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-text flex items-center gap-2">
+              <AlertTriangle size={15} className="text-warning" />
+              Skills Needing Review
+            </h2>
+            <Link to="/review" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Open review queue <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {needsReview.map((s) => (
+              <Link
+                key={s.id}
+                to={`/skills/${s.id}`}
+                className="card card-hover p-4 border-warning/25 bg-warning/[0.03]"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-text line-clamp-2">{s.name}</p>
+                  <StatusBadge status={s.status} />
+                </div>
+                <ConfidenceBar value={s.confidence} className="mt-3" />
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
-      {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s === 'all' ? 'All Statuses' : s.charAt(0).toUpperCase() + s.slice(1)}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          placeholder="Search skills..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+      {!loading && skills.length === 0 && documents.length === 0 && (
+        <EmptyState
+          icon={Inbox}
+          title="Welcome to Cortex"
+          message="Connect your first data source — Slack, GitHub, or Discord — and Cortex will extract your team's tribal knowledge into executable skills."
+          action={
+            <Link to="/sources">
+              <Button variant="primary">Connect a data source <ArrowRight size={14} /></Button>
+            </Link>
+          }
         />
-      </div>
-
-      {/* Skills grouped by department */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-slate-500">
-            {skills.length === 0
-              ? 'No skills extracted yet. Start by ingesting documents.'
-              : 'No skills match your filters.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-10">
-          {DEPARTMENTS.map((dept) => {
-            const items = grouped[dept];
-            if (!items || items.length === 0) return null;
-            return (
-              <section key={dept}>
-                <h2 className="border-l-4 border-indigo-500 pl-3 text-lg font-semibold text-slate-800 mb-4">
-                  {dept}{' '}
-                  <span className="text-sm font-normal text-slate-400">({items.length})</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {items.map((skill) => (
-                    <div
-                      key={skill.id}
-                      onClick={() => navigate(`/skills/${skill.id}`)}
-                      className="cursor-pointer rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="text-sm font-semibold text-slate-900 truncate">
-                          {skill.name}
-                        </h3>
-                        <StatusBadge status={skill.status} />
-                      </div>
-                      <ConfidenceBar score={skill.confidence} />
-                      <div className="flex items-center gap-3 mt-3 text-xs text-slate-500">
-                        {skill.step_count != null && (
-                          <span>{skill.step_count} steps</span>
-                        )}
-                        {skill.needs_review && (
-                          <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path
-                                fillRule="evenodd"
-                                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                            Needs review
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
       )}
     </div>
-  );
+  )
 }

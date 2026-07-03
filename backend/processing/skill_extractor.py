@@ -25,7 +25,7 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_huggingface import HuggingFaceEndpoint
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,12 @@ from backend.processing.prompts.extraction import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Prompt-size guards ────────────────────────────────────────────────────
+# Llama-3.1 has a 128k-token context (~4 chars/token). Large clusters must be
+# capped or the provider rejects the request outright.
+MAX_PROMPT_DOCS = 40
+MAX_DOC_CHARS = 4000
 
 # ── Confidence-scoring constants ──────────────────────────────────────────
 
@@ -168,19 +174,25 @@ class SkillExtractionPipeline:
 
     def _get_llm(self) -> HuggingFaceEndpoint:
         if self._llm is None:
-            self._llm = HuggingFaceEndpoint(
+            endpoint = HuggingFaceEndpoint(
                 repo_id=settings.LLM_MODEL,
                 huggingfacehub_api_token=settings.HUGGINGFACE_API_TOKEN,
                 max_new_tokens=3072,
                 temperature=0.1,
                 repetition_penalty=1.1,
             )
+            # HF Inference Providers only expose chat models via the
+            # chat-completions ("conversational") API, so wrap the endpoint.
+            self._llm = ChatHuggingFace(llm=endpoint)
         return self._llm
 
     def _get_chain(self) -> Any:
         if self._chain is None:
+            # Both messages are injected as variables: the system prompt
+            # contains a literal JSON schema and document content may contain
+            # braces — neither must be parsed as template placeholders.
             prompt = ChatPromptTemplate.from_messages([
-                ("system", EXTRACTION_SYSTEM_PROMPT),
+                ("system", "{system_prompt}"),
                 ("human", "{user_prompt}"),
             ])
             self._chain = prompt | self._get_llm() | StrOutputParser()
@@ -260,7 +272,10 @@ class SkillExtractionPipeline:
 
         for attempt in range(3):
             try:
-                raw: str = await chain.ainvoke({"user_prompt": user_prompt})
+                raw: str = await chain.ainvoke({
+                    "system_prompt": EXTRACTION_SYSTEM_PROMPT,
+                    "user_prompt": user_prompt,
+                })
                 cleaned = _sanitize_json(raw)
                 parsed: dict[str, Any] = json.loads(cleaned)
                 return parsed
@@ -479,11 +494,17 @@ class SkillExtractionPipeline:
         # 3. Retrieve source trust scores
         trust_scores = await self._fetch_trust_scores(db, documents)
 
-        # 4. Build prompt data
+        # 4. Build prompt data (capped so huge clusters fit the LLM context)
+        prompt_docs = documents[:MAX_PROMPT_DOCS]
+        if len(documents) > MAX_PROMPT_DOCS:
+            logger.warning(
+                "Cluster '%s' has %d documents; sending only the first %d to the LLM",
+                topic_label, len(documents), MAX_PROMPT_DOCS,
+            )
         doc_dicts = [
             {
                 "id": d.id,
-                "content": d.content,
+                "content": d.content[:MAX_DOC_CHARS],
                 "source_type": d.source_type,
                 "channel_or_project": d.channel_or_project,
                 "author_name": d.author_name,
@@ -491,7 +512,7 @@ class SkillExtractionPipeline:
                 "created_at": d.created_at,
                 "source_link": d.source_link,
             }
-            for d in documents
+            for d in prompt_docs
         ]
         feedback_dicts = [
             {

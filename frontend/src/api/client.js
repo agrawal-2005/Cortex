@@ -67,6 +67,43 @@ export function getIngestStatus(taskId) {
   return api.get('/ingest/status', { params: { task_id: taskId } })
 }
 
+export function ingestGitHub({ repo, token, months = 6, includeComments = true }) {
+  return api.post('/ingest/github', {
+    repo,
+    token: token || null,
+    months,
+    include_comments: includeComments,
+  })
+}
+
+export function uploadDiscordExport(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/ingest/discord/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function ingestDiscordLive({ guildId, channelIds, botToken }) {
+  return api.post('/ingest/discord/live', {
+    guild_id: guildId,
+    channel_ids: channelIds,
+    bot_token: botToken || null,
+  })
+}
+
+// ── Processing (skill extraction) ───────────────────────────────────────────
+
+const v1Processing = axios.create({ baseURL: '/api/v1/processing' })
+
+export function clusterDocuments(limit = 500) {
+  return v1Processing.post('/cluster', null, { params: { limit } })
+}
+
+export function extractAllClusters(clusters) {
+  return v1Processing.post('/extract-all', clusters)
+}
+
 // ── Query ───────────────────────────────────────────────────────────────────
 
 export function queryKnowledge(question) {

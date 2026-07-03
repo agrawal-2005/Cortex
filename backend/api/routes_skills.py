@@ -37,7 +37,9 @@ async def list_skills(
     search: str | None = Query(None, description="Search in name/description"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    query = select(Skill).options(selectinload(Skill.steps))
+    query = select(Skill).options(
+        selectinload(Skill.steps).selectinload(SkillStep.sources)
+    )
 
     if status:
         query = query.where(Skill.status == status)
@@ -71,6 +73,7 @@ async def list_skills(
             "confidence": skill.confidence,
             "version": skill.version,
             "step_count": len(skill.steps),
+            "source_count": sum(len(s.sources) for s in skill.steps),
             "needs_review": any(
                 s.confidence < 0.8 for s in skill.steps
             ),
@@ -115,6 +118,30 @@ async def get_skill(
 
     rendered = render_skill_dict(skill)
     rendered["markdown"] = render_skill_markdown(skill)
+
+    # Enrich step sources with document metadata (type, link, author, date)
+    doc_ids = {
+        src["document_id"]
+        for step in rendered["steps"]
+        for src in step["sources"]
+    }
+    if doc_ids:
+        from backend.knowledge.models import Document
+
+        doc_result = await db.execute(
+            select(Document).where(Document.id.in_(doc_ids))
+        )
+        docs_by_id = {d.id: d for d in doc_result.scalars().all()}
+        for step in rendered["steps"]:
+            for src in step["sources"]:
+                doc = docs_by_id.get(src["document_id"])
+                if doc:
+                    src["source_type"] = doc.source_type
+                    src["source_link"] = doc.source_link
+                    src["author_name"] = doc.author_name
+                    src["created_at"] = (
+                        doc.created_at.isoformat() if doc.created_at else None
+                    )
 
     return rendered
 
