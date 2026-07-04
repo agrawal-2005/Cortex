@@ -9,8 +9,10 @@ from backend.processing.skill_extractor import (
     _authority_weight,
     _evidence_weight,
     _sanitize_json,
+    _step_is_risky,
+    _step_sources_demand_approval,
+    _APPROVAL_LANGUAGE_PATTERN,
     _BASE_CONFIDENCE,
-    _REVIEW_THRESHOLD,
 )
 
 
@@ -228,6 +230,68 @@ class TestStepScoring:
             {"jira::engineering": 1.0},
         )
         assert score <= 1.0
+
+
+class TestRiskyStepPattern:
+    """Widened net: production/incident/rollback context must trip the
+    approval-gate requirement even when the step is worded vaguely."""
+
+    @pytest.mark.parametrize("action", [
+        "Mitigate issue",
+        "Declare P0 incident",
+        "Rollback webhook dispatcher",
+        "Roll back to the previous build",
+        "Apply hotfix",
+        "Merge-to-prod after review",
+        "Deploy the service",
+        "Push to production",
+        "Issue a refund",
+        "Delete stale records",
+    ])
+    def test_risky_actions_match(self, action):
+        assert _step_is_risky({"action": action})
+
+    @pytest.mark.parametrize("action", [
+        "Check Grafana dashboard",
+        "Write meeting notes",
+        "Update the README",
+    ])
+    def test_benign_actions_do_not_match(self, action):
+        assert not _step_is_risky({"action": action})
+
+
+class TestApprovalLanguage:
+    @pytest.mark.parametrize("text", [
+        "create branch from main, fix, get 1 approval, merge with [HOTFIX]",
+        "get approval from your lead first",
+        "2 approvals per the review policy, this ships to prod",
+        "this requires sign-off from finance",
+        "loop in the account manager for amounts over $5000",
+        "before processing the refund, verify the charge",
+    ])
+    def test_approval_language_matches(self, text):
+        assert _APPROVAL_LANGUAGE_PATTERN.search(text)
+
+    def test_casual_approval_mention_does_not_match(self):
+        # A bare review comment ("Approval #1") is not a process requirement.
+        assert not _APPROVAL_LANGUAGE_PATTERN.search(
+            "[raj.patel]: Approval #1 — nice catch."
+        )
+
+    def test_step_sources_demand_approval_reads_cited_docs(self):
+        doc = MagicMock()
+        doc.content = "For hotfixes: get 1 approval, then merge."
+        lookup = {"doc-1": doc}
+        assert _step_sources_demand_approval(
+            {"source_document_ids": ["doc-1"]}, lookup
+        )
+        assert not _step_sources_demand_approval(
+            {"source_document_ids": ["missing"]}, lookup
+        )
+        doc.content = "Nothing procedural here."
+        assert not _step_sources_demand_approval(
+            {"source_document_ids": ["doc-1"]}, lookup
+        )
 
 
 class TestLLMCall:

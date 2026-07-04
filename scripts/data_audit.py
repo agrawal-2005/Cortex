@@ -10,7 +10,6 @@ Run from the repo root (so ./chroma_data resolves):
 
 import asyncio
 import random
-import re
 import sys
 from collections import Counter
 from urllib.parse import urlparse

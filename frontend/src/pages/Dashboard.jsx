@@ -7,7 +7,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
-import { getSkills, getDocuments, getDocumentSourceTypes } from '../api/client'
+import { getSkills, getDocuments, getDocumentSourceTypes, getSkillStats } from '../api/client'
 import { Skeleton, SkeletonCard, EmptyState, StatusBadge, ConfidenceBar, Button } from '../components/Primitives'
 import SourceIcon from '../components/SourceIcon'
 import { confidenceColor, pct, timeAgo, sourceKeyOf } from '../lib/ui'
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [skills, setSkills] = useState(null)
   const [documents, setDocuments] = useState(null)
   const [sourceTypes, setSourceTypes] = useState(null)
+  const [skillStats, setSkillStats] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -45,6 +46,9 @@ export default function Dashboard() {
         setSourceTypes(Array.isArray(typesRes.data) ? typesRes.data : [])
       })
       .catch((e) => setError(e.message))
+    getSkillStats()
+      .then((res) => setSkillStats(res.data))
+      .catch(() => {})
   }, [])
 
   const stats = useMemo(() => {
@@ -130,13 +134,23 @@ export default function Dashboard() {
             <StatCard
               icon={ClipboardList}
               label="Total Skills"
-              value={skills.length}
+              value={skillStats?.skills_ready ?? skills.length}
               sub={
-                <span>
-                  <span className="text-success">{stats.verified} verified</span>
-                  {' · '}
-                  <span className="text-warning">{stats.inReview} in review</span>
-                </span>
+                skillStats ? (
+                  <span>
+                    <span className="text-success">{skillStats.skills_ready} ready</span>
+                    {' · '}
+                    <span className="text-secondary">
+                      {skillStats.topics_on_demand} topic{skillStats.topics_on_demand === 1 ? '' : 's'} on demand
+                    </span>
+                  </span>
+                ) : (
+                  <span>
+                    <span className="text-success">{stats.verified} verified</span>
+                    {' · '}
+                    <span className="text-warning">{stats.inReview} in review</span>
+                  </span>
+                )
               }
             />
             <StatCard

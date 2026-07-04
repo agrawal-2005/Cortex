@@ -9,13 +9,12 @@ Usage:
 """
 
 import asyncio
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from backend.knowledge.models import Document
@@ -23,8 +22,10 @@ from backend.processing.clustering import TopicClusterer
 from backend.processing.skill_extractor import SkillExtractionPipeline
 
 DB_URL = "postgresql+asyncpg://cortex:cortex@localhost:5432/cortex"
-SOURCES = ("slack", "jira", "confluence")
-CLUSTERS_FILE = "/tmp/acmetech_clusters.json"
+SOURCES = ("slack", "jira", "confluence", "github_pr", "github_issue")
+# github_pr/github_issue documents also exist from other repos (e.g. the
+# strix ingestion test) — only the AcmeTech repo belongs to this dataset.
+GITHUB_REPO = "acmetech/platform"
 
 
 async def main() -> None:
@@ -36,7 +37,14 @@ async def main() -> None:
         docs = (
             (
                 await db.execute(
-                    select(Document).where(Document.source_type.in_(SOURCES))
+                    select(Document).where(
+                        or_(
+                            Document.source_type.in_(
+                                ("slack", "jira", "confluence")
+                            ),
+                            Document.channel_or_project == GITHUB_REPO,
+                        )
+                    )
                 )
             )
             .scalars()
@@ -45,15 +53,10 @@ async def main() -> None:
         print(f"AcmeTech documents: {len(docs)} "
               f"({ {t: sum(1 for d in docs if d.source_type == t) for t in SOURCES} })")
 
-        if os.path.exists(CLUSTERS_FILE) and do_extract:
-            clusters = json.load(open(CLUSTERS_FILE))
-            print(f"Loaded {len(clusters)} clusters from {CLUSTERS_FILE}")
-        else:
-            clusterer = TopicClusterer()
-            clusters = clusterer.cluster_documents(
-                [{"id": d.id, "content": d.content} for d in docs]
-            )
-            json.dump(clusters, open(CLUSTERS_FILE, "w"))
+        clusterer = TopicClusterer()
+        clusters = clusterer.cluster_documents(
+            [{"id": d.id, "content": d.content} for d in docs]
+        )
 
         by_id = {d.id: d for d in docs}
         for c in sorted(clusters, key=lambda c: -c["document_count"]):

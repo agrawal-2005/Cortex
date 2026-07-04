@@ -12,6 +12,10 @@ from sqlalchemy.orm import selectinload
 from backend.database import get_db
 from backend.knowledge.models import Document, Skill, SkillStep
 from backend.processing.clustering import TopicClusterer
+from backend.processing.lazy_extraction import (
+    ExtractionInProgressError,
+    LazyExtractionService,
+)
 from backend.processing.skill_extractor import SkillExtractionPipeline
 from backend.processing.renderer import (
     render_skill_dict,
@@ -94,35 +98,22 @@ async def extract_skill_from_cluster(
     return render_skill_dict(skill)
 
 
-@router.post("/extract-all")
-async def extract_all_from_clusters(
-    clusters: list[dict[str, Any]],
+@router.post("/lazy-extract")
+async def lazy_extract(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Extract skills from multiple topic clusters.
+    """Cluster all documents and pre-extract only the top clusters.
 
-    Accepts the output of the /cluster endpoint directly.
+    Runs automatically after every ingestion — this endpoint exists as a
+    manual trigger (e.g. after ingesting data another way or a failed
+    run). Everything else is stored as pending topics extracted on demand
+    at query time. Full extraction of every cluster is available only via
+    the admin script ``scripts/extract_all.py``.
     """
-    pipeline = SkillExtractionPipeline()
-    skills = await pipeline.extract_all_clusters(db=db, clusters=clusters)
-
-    # Commit immediately so extracted skills survive any rendering error —
-    # each one may have cost an LLM call.
-    await db.commit()
-
-    # Reload with relationships for rendering
-    skill_ids = [s.id for s in skills]
-    result = await db.execute(
-        select(Skill)
-        .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
-        .where(Skill.id.in_(skill_ids))
-    )
-    loaded_skills = result.scalars().all()
-
-    return {
-        "skills_extracted": len(loaded_skills),
-        "skills": [render_skill_dict(s) for s in loaded_skills],
-    }
+    try:
+        return await LazyExtractionService().cluster_and_pre_extract(db)
+    except ExtractionInProgressError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 # ── Rendering ─────────────────────────────────────────────────────────────

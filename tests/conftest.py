@@ -63,6 +63,45 @@ def _offline_embeddings(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _stub_post_ingest_extraction(monkeypatch):
+    """Ingestion routes trigger lazy extraction automatically.
+
+    Running it for real in every upload test would build HDBSCAN clusters
+    and a Groq client. Stub it; wiring tests assert the stub was awaited,
+    and tests/test_lazy_extraction.py exercises the real service directly.
+    """
+    from backend.processing.lazy_extraction import LazyExtractionService
+
+    mock = AsyncMock(
+        return_value={
+            "documents": 0,
+            "clusters": 0,
+            "skills_extracted": 0,
+            "already_covered": 0,
+            "pending_topics": 0,
+        }
+    )
+    monkeypatch.setattr(LazyExtractionService, "cluster_and_pre_extract", mock)
+    return mock
+
+
+@pytest.fixture(autouse=True)
+def _stub_on_demand_extraction(monkeypatch):
+    """Query-route tests must never reach a real LLM.
+
+    The query route triggers on-demand extraction when documents match no
+    skill — stub it to "nothing extracted" so legacy query tests keep
+    exercising the fallback paths offline. tests/test_lazy_extraction.py
+    restores the real method and mocks the LLM chain instead.
+    """
+    from backend.processing.lazy_extraction import LazyExtractionService
+
+    mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(LazyExtractionService, "extract_on_demand", mock)
+    return mock
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """Each test starts with a clean rate-limit window."""
     limiter.reset()

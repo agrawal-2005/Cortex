@@ -36,12 +36,18 @@ from backend.processing.skill_extractor import (
     SchemaValidationError,
     SkillExtractionPipeline,
     STRICT_FORMAT_REMINDER,
+    _normalize_step_citations,
     _sanitize_json,
     _validate_skill_schema,
 )
+from backend.processing.lazy_extraction import LazyExtractionService
 from tests.conftest import TestSessionLocal
 
 LOGGER_NAME = "backend.processing.skill_extractor"
+
+# Real implementation, captured before the autouse conftest stub replaces
+# it on the class (see _stub_post_ingest_extraction).
+_REAL_CLUSTER_AND_PRE_EXTRACT = LazyExtractionService.cluster_and_pre_extract
 
 
 # ── Fixtures & helpers ────────────────────────────────────────────────────
@@ -363,7 +369,7 @@ class TestRateLimit:
             Exception("Rate limit reached, too many requests"),
             VALID_RESPONSE,
         ])
-        result = await pipeline._call_llm("test", [], [])
+        await pipeline._call_llm("test", [], [])
         assert calls["count"] == 2
 
     @pytest.mark.asyncio
@@ -513,6 +519,9 @@ class TestMinimumSteps:
 # Live incident: cluster 'radarhere_dependabot_update' returned
 # "source_document_ids": null → "'NoneType' object is not iterable".
 # .get(key, default) does not cover keys present with a null value.
+# Note: null *citations* are now a validation failure (see
+# TestStepCitationsRequired); the other optional fields must still
+# tolerate explicit nulls without crashing.
 
 class TestNullFields:
     @pytest.mark.asyncio
@@ -520,7 +529,6 @@ class TestNullFields:
         await seed_documents(["alpha"])
         nulled = json.loads(VALID_RESPONSE)
         for step in nulled["steps"]:
-            step["source_document_ids"] = None
             step["source_snippets"] = None
             step["details"] = None
         nulled["conditions"] = None
@@ -544,8 +552,126 @@ class TestNullFields:
             ).scalar_one()
             assert persisted.description == ""
             assert persisted.skill_data["conditions"] == []
-            # no citations → every step scored at base confidence
-            assert persisted.confidence == pytest.approx(0.40)
+
+
+# ── 11b. Per-step citations are required ──────────────────────────────────
+# Models emitted citations inconsistently (only 1 of ~30 AcmeTech skills
+# had per-step details citations); the validator now enforces them via the
+# same stricter-prompt retry as the 3-step minimum.
+
+class TestStepCitationsRequired:
+    def test_validator_rejects_missing_citations(self):
+        bad = json.loads(VALID_RESPONSE)
+        del bad["steps"][1]["source_document_ids"]
+        with pytest.raises(SchemaValidationError, match="source_document_ids"):
+            _validate_skill_schema(bad)
+
+    def test_validator_rejects_null_citations(self):
+        bad = json.loads(VALID_RESPONSE)
+        bad["steps"][0]["source_document_ids"] = None
+        with pytest.raises(SchemaValidationError, match="source_document_ids"):
+            _validate_skill_schema(bad)
+
+    def test_normalizer_hoists_citations_nested_in_details(self):
+        # Live incident: the postmortem skill emitted citations inside
+        # step["details"], invisible to scoring and StepSource persistence.
+        nested = json.loads(VALID_RESPONSE)
+        for step in nested["steps"]:
+            details = step.get("details") or {}
+            details["source_document_ids"] = step.pop("source_document_ids")
+            details["source_snippets"] = step.pop("source_snippets", [])
+            step["details"] = details
+        _normalize_step_citations(nested)
+        _validate_skill_schema(nested)  # must not raise
+        for step in nested["steps"]:
+            assert step["source_document_ids"]
+            assert "source_document_ids" not in step["details"]
+
+    @pytest.mark.asyncio
+    async def test_missing_citations_retried_with_stricter_prompt(self, no_sleep):
+        uncited = json.loads(VALID_RESPONSE)
+        for step in uncited["steps"]:
+            step["source_document_ids"] = []
+        pipeline, calls = make_pipeline([json.dumps(uncited), VALID_RESPONSE])
+        result = await pipeline._call_llm("test", [], [])
+        assert calls["count"] == 2
+        assert STRICT_FORMAT_REMINDER in calls["prompts"][1]
+        assert all(s["source_document_ids"] for s in result["steps"])
+
+
+# ── 11c. Safety gate: risky tools require an approval_gate ────────────────
+# A skill that moves money or destroys state must never be persisted with
+# safe_to_automate=true unless at least one step has an approval_gate.
+
+def _risky_skill(with_gate: bool) -> str:
+    skill = json.loads(VALID_RESPONSE)
+    skill["steps"][0]["action"] = "Process refund via Stripe"
+    if with_gate:
+        skill["steps"][0]["details"] = {
+            "approval_gate": {"if": "amount > 5000", "require": "account_manager"},
+        }
+    skill["automation_readiness"] = {
+        "level": "executable",
+        "safe_to_automate": True,  # the LLM's overconfident self-assessment
+        "missing_for_automation": None,
+    }
+    return json.dumps(skill)
+
+
+class TestRiskySkillSafetyGate:
+    @pytest.mark.asyncio
+    async def test_money_moving_without_gate_forces_unsafe(self, no_sleep, caplog):
+        await seed_documents(["alpha"])
+        pipeline, _ = make_pipeline([_risky_skill(with_gate=False)])
+        async with TestSessionLocal() as db:
+            with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+                skill = await pipeline.extract_from_cluster(
+                    db, ["alpha"], topic_label="refund flow"
+                )
+            readiness = skill.automation_readiness
+        assert readiness["safe_to_automate"] is False
+        assert any(
+            "missing approval gate" in item
+            for item in readiness["missing_for_automation"]
+        )
+        assert "forcing safe_to_automate=false" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_money_moving_with_gate_keeps_llm_assessment(self, no_sleep):
+        await seed_documents(["alpha"])
+        pipeline, _ = make_pipeline([_risky_skill(with_gate=True)])
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["alpha"], topic_label="refund flow"
+            )
+            readiness = skill.automation_readiness
+        assert readiness["safe_to_automate"] is True
+
+    @pytest.mark.asyncio
+    async def test_non_risky_skill_untouched(self, no_sleep):
+        await seed_documents(["alpha"])
+        benign = json.loads(VALID_RESPONSE)
+        # VALID_SKILL's step 3 is "Deploy to production" — itself risky.
+        # Replace actions with genuinely benign ones.
+        for step, action in zip(
+            benign["steps"],
+            ["Run the test suite", "Build the Docker image", "Tag the release"],
+        ):
+            step["action"] = action
+        benign["automation_readiness"] = {
+            "level": "executable", "safe_to_automate": True,
+        }
+        pipeline, _ = make_pipeline([json.dumps(benign)])
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["alpha"], topic_label="benign flow"
+            )
+            readiness = skill.automation_readiness
+        assert readiness["safe_to_automate"] is True
+        assert "missing_for_automation" not in readiness or not any(
+            "missing approval gate" in item
+            for item in (readiness.get("missing_for_automation") or [])
+        )
 
     @pytest.mark.asyncio
     async def test_null_name_falls_back_to_topic_label(self, no_sleep):
@@ -601,26 +727,158 @@ class TestSkillsUsableAfterRollback:
             assert skills[0].name == VALID_SKILL["name"]
 
     @pytest.mark.asyncio
-    async def test_extract_all_route_returns_partial_success_on_402(
-        self, no_sleep, client
+    async def test_lazy_pre_extraction_defers_to_pending_on_402(
+        self, no_sleep, monkeypatch
     ):
-        """The HTTP route must report the partial result, not 500."""
-        from unittest.mock import patch
+        """A 402 mid-run keeps saved skills and defers the rest to pending.
+
+        Pre-extraction stops calling the LLM after credits run out; the
+        unprocessed clusters become pending topics that query-time
+        extraction can pick up once credits are back.
+        """
+        from backend.knowledge.models import PendingCluster
+
+        # conftest stubs cluster_and_pre_extract for route tests — restore
+        # the real implementation captured before any stubbing.
+        monkeypatch.setattr(
+            LazyExtractionService,
+            "cluster_and_pre_extract",
+            _REAL_CLUSTER_AND_PRE_EXTRACT,
+        )
 
         await seed_documents(["alpha", "beta", "gamma"])
         pipeline, _ = make_pipeline([
             VALID_RESPONSE,
             FakeHTTPError(402, "402 Client Error: Payment Required"),
         ])
-        clusters = make_clusters(["alpha"], ["beta"], ["gamma"])
+        clusters = [
+            {
+                "cluster_id": i,
+                "topic": f"cluster-{i}",
+                "document_ids": [did],
+                "document_count": 1,
+            }
+            for i, did in enumerate(["alpha", "beta", "gamma"])
+        ]
+        service = LazyExtractionService(
+            clusterer=SimpleNamespace(cluster_documents=lambda docs: clusters),
+            pipeline=pipeline,
+            live_pipeline=pipeline,
+        )
 
-        with patch(
-            "backend.processing.router.SkillExtractionPipeline",
-            return_value=pipeline,
-        ):
-            res = await client.post("/api/v1/processing/extract-all", json=clusters)
+        async with TestSessionLocal() as db:
+            summary = await service.cluster_and_pre_extract(db, top_n=3)
 
-        assert res.status_code == 200
-        body = res.json()
-        assert body["skills_extracted"] == 1
-        assert body["skills"][0]["name"] == VALID_SKILL["name"]
+        assert summary["skills_extracted"] == 1
+        assert summary["pending_topics"] == 2
+        assert await count_skills_in_db() == 1
+
+        async with TestSessionLocal() as db:
+            rows = (await db.execute(select(PendingCluster))).scalars().all()
+        assert {r.topic for r in rows} == {"cluster-1", "cluster-2"}
+        assert all(r.status == "pending" for r in rows)
+
+
+# ── 11. Approval-language safety gate ─────────────────────────────────────
+
+class TestApprovalSafetyGate:
+    """If a step's cited SOURCE contains approval language and the step has
+    no approval_gate, safe_to_automate must be forced to false — regardless
+    of how vaguely the step itself is worded."""
+
+    async def _seed_approval_doc(self, doc_id, content):
+        async with TestSessionLocal() as session:
+            session.add(
+                Document(
+                    id=doc_id,
+                    content=content,
+                    source_type="github_pr",
+                    source_id=f"src-{doc_id}",
+                    channel_or_project="acmetech/platform",
+                    author_name="Raj Patel",
+                    author_role="Senior Engineer",
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                )
+            )
+            await session.commit()
+
+    def _skill_response(self, approval_gate=None):
+        details = {"explanation": "follow the runbook"}
+        if approval_gate:
+            details["approval_gate"] = approval_gate
+        return json.dumps({
+            "name": "Handle The Thing",
+            "description": "Vaguely worded process.",
+            "department": "engineering",
+            "steps": [
+                {
+                    "step_order": 1,
+                    "action": "Gather context",
+                    "details": {"explanation": "read the ticket"},
+                    "source_document_ids": ["gated-doc"],
+                    "source_snippets": ["context"],
+                },
+                {
+                    "step_order": 2,
+                    "action": "Resolve the situation",  # deliberately vague
+                    "details": details,
+                    "source_document_ids": ["gated-doc"],
+                    "source_snippets": ["get 1 approval"],
+                },
+                {
+                    "step_order": 3,
+                    "action": "Confirm with the reporter",
+                    "details": {"explanation": "close the loop"},
+                    "source_document_ids": ["gated-doc"],
+                    "source_snippets": ["confirm"],
+                },
+            ],
+            "automation_readiness": {
+                "level": "executable",
+                "safe_to_automate": True,
+                "missing_for_automation": [],
+                "requires_human_review": [],
+            },
+        })
+
+    @pytest.mark.asyncio
+    async def test_source_approval_language_forces_safe_false(self):
+        await self._seed_approval_doc(
+            "gated-doc",
+            "For hotfix-class changes: get 1 approval, merge, then deploy.",
+        )
+        pipeline, _ = make_pipeline([self._skill_response()])
+
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["gated-doc"], "vague process"
+            )
+            await db.commit()
+
+        readiness = skill.automation_readiness
+        assert readiness["safe_to_automate"] is False
+        assert (
+            "approval language detected in source but not captured"
+            in readiness["missing_for_automation"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_captured_approval_gate_is_respected(self):
+        """When the step DOES carry an approval_gate, the LLM's
+        safe_to_automate judgment is left alone."""
+        await self._seed_approval_doc(
+            "gated-doc",
+            "For hotfix-class changes: get 1 approval, merge, then deploy.",
+        )
+        gate = {"approver_role": "reviewer", "rule": "1 approval before merge"}
+        pipeline, _ = make_pipeline([self._skill_response(approval_gate=gate)])
+
+        async with TestSessionLocal() as db:
+            skill = await pipeline.extract_from_cluster(
+                db, ["gated-doc"], "vague process"
+            )
+            await db.commit()
+
+        readiness = skill.automation_readiness
+        assert readiness["safe_to_automate"] is True
+        assert readiness["missing_for_automation"] == []

@@ -31,10 +31,6 @@ async def create_document(
     await db.flush()
     await db.refresh(doc)
 
-    # TODO: trigger Celery processing task
-    # from backend.tasks.process import process_document
-    # process_document.delay(doc.id)
-
     return DocumentResponse.model_validate(doc)
 
 
@@ -64,11 +60,6 @@ async def create_documents_batch(
         await db.refresh(doc)
 
         results.append(DocumentResponse.model_validate(doc))
-
-    # TODO: trigger Celery processing tasks for all documents
-    # from backend.tasks.process import process_document
-    # for r in results:
-    #     process_document.delay(r.id)
 
     return results
 

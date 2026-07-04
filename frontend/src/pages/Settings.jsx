@@ -3,7 +3,7 @@ import {
   Settings as SettingsIcon, Server, Sparkles, Loader2, CheckCircle2,
   FileText, BrainCircuit,
 } from 'lucide-react'
-import { getSkills, getDocuments, clusterDocuments, extractAllClusters } from '../api/client'
+import { getSkills, getDocuments, runLazyExtraction } from '../api/client'
 import { Button } from '../components/Primitives'
 import { useToast } from '../components/Toast'
 
@@ -40,16 +40,16 @@ export default function Settings() {
   const runExtraction = async () => {
     setExtracting(true)
     try {
-      const clusterRes = await clusterDocuments()
-      const clusters = clusterRes.data?.clusters || []
-      if (clusters.length === 0) {
+      const res = await runLazyExtraction()
+      const d = res.data || {}
+      if ((d.clusters ?? 0) === 0) {
         toast('No document clusters found — ingest more data first.', 'warning')
         return
       }
-      const extractRes = await extractAllClusters(clusters)
-      const n = extractRes.data?.skills_extracted ?? 0
-      setLastRun({ skills: n, at: new Date() })
-      toast(`Extraction complete — ${n} skill${n === 1 ? '' : 's'} extracted.`)
+      const n = d.skills_extracted ?? 0
+      const pending = d.pending_topics ?? 0
+      setLastRun({ skills: n, pending, at: new Date() })
+      toast(`Extraction complete — ${n} skill${n === 1 ? '' : 's'} ready · ${pending} topic${pending === 1 ? '' : 's'} available on demand.`)
       loadCounts()
     } catch (e) {
       toast(e.response?.data?.detail || 'Skill extraction failed.', 'error')
@@ -86,9 +86,10 @@ export default function Settings() {
           <Sparkles size={15} className="text-primary" /> Skill extraction
         </h2>
         <p className="text-sm text-text-dim leading-relaxed">
-          Cortex clusters ingested documents by topic and extracts executable skills from
-          each cluster. This runs automatically after connecting a source — trigger it
-          manually if you ingested data another way or a previous run failed.
+          Cortex clusters ingested documents by topic, extracts skills from the largest
+          clusters right away, and answers the rest on demand at query time. This runs
+          automatically after connecting a source — trigger it manually if you ingested
+          data another way or a previous run failed.
         </p>
         <div className="flex items-center gap-3 flex-wrap">
           <Button variant="primary" onClick={runExtraction} disabled={extracting}>
@@ -99,7 +100,8 @@ export default function Settings() {
           {lastRun && !extracting && (
             <span className="flex items-center gap-1.5 text-xs text-success">
               <CheckCircle2 size={13} />
-              {lastRun.skills} skill{lastRun.skills === 1 ? '' : 's'} extracted at{' '}
+              {lastRun.skills} skill{lastRun.skills === 1 ? '' : 's'} ready ·{' '}
+              {lastRun.pending} topic{lastRun.pending === 1 ? '' : 's'} on demand at{' '}
               {lastRun.at.toLocaleTimeString()}
             </span>
           )}

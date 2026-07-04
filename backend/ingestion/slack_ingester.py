@@ -1,11 +1,10 @@
 import json
 import logging
-import os
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.knowledge.models import Document
@@ -28,6 +27,7 @@ class SlackExportIngester:
             "threads_processed": 0,
             "attachments_processed": 0,
             "documents_created": 0,
+            "documents_skipped_existing": 0,
             "errors": 0,
         }
 
@@ -280,9 +280,25 @@ class SlackExportIngester:
 
         logger.info("Parsed %d documents from Slack export", len(all_docs))
 
-        # Step 3: Store in PostgreSQL
+        # Step 3: Store in PostgreSQL — skipping messages already ingested
+        # (same source_type + source_id), so re-uploading an export is
+        # idempotent instead of duplicating every document.
+        source_ids = {d["source_id"] for d in all_docs if d.get("source_id")}
+        existing: set[str] = set()
+        if source_ids:
+            result = await db.execute(
+                select(Document.source_id).where(
+                    Document.source_type == "slack",
+                    Document.source_id.in_(source_ids),
+                )
+            )
+            existing = {row[0] for row in result.all()}
+
         created_docs: list[Document] = []
         for doc_data in all_docs:
+            if doc_data.get("source_id") in existing:
+                self.stats["documents_skipped_existing"] += 1
+                continue
             doc = Document(**doc_data)
             db.add(doc)
             created_docs.append(doc)

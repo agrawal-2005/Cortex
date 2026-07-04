@@ -7,7 +7,6 @@ skill_documents (every doc in the source cluster) first, falling back to
 step_sources for legacy skills.
 """
 
-import json
 import uuid
 from unittest.mock import AsyncMock, patch
 

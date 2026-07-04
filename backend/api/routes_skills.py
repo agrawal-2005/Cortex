@@ -10,9 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.database import get_db
-from backend.knowledge.models import Skill, SkillStep
+from backend.knowledge.models import PendingCluster, Skill, SkillStep
 from backend.processing.renderer import render_skill_dict, render_skill_markdown
-from backend.schemas import SkillResponse
 
 router = APIRouter(tags=["skills"])
 
@@ -90,6 +89,42 @@ async def list_skills(
         "total": total,
         "skip": skip,
         "limit": limit,
+    }
+
+
+# ── GET /stats — Skill readiness (lazy extraction) ────────────────────────
+
+
+@router.get(
+    "/stats",
+    summary="Skill readiness stats",
+    description=(
+        "Counts for the dashboard headline: skills already extracted "
+        "(ready to serve) and pending topic clusters that will be "
+        "extracted on demand the first time a query needs them."
+    ),
+)
+async def skill_stats(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    ready = (
+        await db.execute(
+            select(func.count())
+            .select_from(Skill)
+            .where(Skill.status != "rejected-not-repeatable")
+        )
+    ).scalar() or 0
+    on_demand = (
+        await db.execute(
+            select(func.count())
+            .select_from(PendingCluster)
+            .where(PendingCluster.status == "pending")
+        )
+    ).scalar() or 0
+    return {
+        "skills_ready": ready,
+        "topics_on_demand": on_demand,
+        "headline": (
+            f"{ready} skills ready · {on_demand} topics available on demand"
+        ),
     }
 
 

@@ -42,21 +42,30 @@ name the inputs the workflow operates on, it is probably not a real skill.
    command, code snippet, API endpoint, config value, or exact string that
    a person would type or run, you MUST include it verbatim in the step.
    Never replace a concrete command with a description of the command.
-   BAD:  "comment with the appropriate ignore command"
-   GOOD: "comment: '@dependabot ignore this major version' (for major) or
-          '@dependabot ignore this dependency' (to ignore entirely)"
+   BAD:  "restart the affected service"
+   GOOD: "run: 'kubectl rollout restart deployment/api --namespace prod'"
 2. Every skill MUST declare "inputs_schema": the parameters it operates on
-   (e.g. for a Dependabot workflow: {"repo": "...", "pr_number": "..."}).
-   Reference inputs inside steps as template values like {{input.repo}}.
-3. Every step MUST cite at least one source document by its ID, with a
-   short verbatim quote ("snippet") that supports the step.
+   (e.g. for a ticket-escalation workflow:
+   {"ticket_id": "...", "severity": "..."}).
+   Reference inputs inside steps as template values like
+   {{input.ticket_id}}.
+3. Every step MUST cite the source document(s) it was derived from: a
+   non-empty "source_document_ids" array at the step's top level, plus a
+   short verbatim quote in "source_snippets" that supports the step. A
+   step with no source_document_ids is invalid and will be rejected.
 4. If EXPERT CORRECTIONS are provided, they override any conflicting source
    material — treat them as ground truth.
 5. Steps must be specific enough that someone (or something) unfamiliar
    with the process can execute them: concrete tool, concrete invocation,
    machine-checkable success criteria, and what to do on failure.
 6. Identify edge cases that could cause the process to fail or branch.
-7. Assess automation_readiness HONESTLY:
+7. When a source specifies an approval requirement, dollar threshold, or
+   sign-off (e.g. "get manager approval over $5000"), you MUST populate
+   the "approval_gate" field on the relevant step:
+   {"if": "amount > 5000", "require": "account_manager"}.
+   Do not express approval rules only as prose steps or branches — the
+   approval_gate field is what an executing agent enforces.
+8. Assess automation_readiness HONESTLY:
    - "executable" = has inputs, concrete commands, success criteria, and
      error handling for every step
    - "assisted"   = mostly complete but needs human checkpoints
@@ -65,11 +74,11 @@ name the inputs the workflow operates on, it is probably not a real skill.
    sources", "approval threshold amount unclear"). Do NOT claim
    "executable" if any step lacks a concrete invocation or success
    criterion.
-8. Only include facts supported by the source documents. Never invent
+9. Only include facts supported by the source documents. Never invent
    commands, endpoints, or values that are not in the sources — if a detail
    is missing, set the field to null and list it in
    automation_readiness.missing_for_automation.
-9. Respond with ONLY the JSON object described below — no prose, no
+10. Respond with ONLY the JSON object described below — no prose, no
    markdown fences, no commentary. Omit or use null for step-detail fields
    that do not apply; do not pad them with made-up content.
 
@@ -89,7 +98,7 @@ For a repeatable workflow, output exactly ONE JSON object with this schema:
   "trigger": {
     "type": "<event|manual|scheduled>",
     "condition": "<what kicks this workflow off>",
-    "event_binding": "<machine-readable event if applicable, e.g. 'github:pull_request.opened by dependabot[bot]' — or null>"
+    "event_binding": "<machine-readable event derived from THIS cluster's sources — or null. NEVER copy an example below; if the sources do not name a machine-readable event, use null. Format examples for DIFFERENT workflow kinds: 'email:received to:support@company.com', 'alertmanager:alert.firing severity=P1', 'cron:0 2 * * *', 'github:pull_request.opened'>"
   },
   "inputs_schema": {
     "<param_name>": "<description and format, e.g. 'repository in owner/name form'>"

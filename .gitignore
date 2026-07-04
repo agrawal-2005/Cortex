@@ -40,6 +40,9 @@ docker-compose.override.yml
 # ChromaDB
 chroma_data/
 
+# Claude Code session state
+.claude/
+
 # IDE
 .vscode/
 .idea/

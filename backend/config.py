@@ -7,8 +7,24 @@ class Settings(BaseSettings):
     HUGGINGFACE_API_TOKEN: str = ""
     SLACK_BOT_TOKEN: str = ""
     CHROMA_PERSIST_DIR: str = "./chroma_data"
+    # LLM backend: "huggingface", "ollama", or "groq".
+    LLM_PROVIDER: str = "huggingface"
     LLM_MODEL: str = "meta-llama/Llama-3.1-8B-Instruct"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    # Larger Groq model used for on-demand ("live") extraction at query
+    # time, where one cluster is extracted while the user waits.
+    GROQ_LIVE_MODEL: str = "llama-3.3-70b-versatile"
+    OLLAMA_MODEL: str = "llama3.1"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+
+    # ── Lazy extraction ───────────────────────────────────────────────────
+    # After ingestion every document is clustered (cheap), but only the
+    # largest PRE_EXTRACT_TOP_N clusters are extracted immediately. The
+    # rest are stored as pending clusters and extracted on demand at query
+    # time.
+    PRE_EXTRACT_TOP_N: int = 6
 
     # ── Security ──────────────────────────────────────────────────────────
     # "development" or "production" — controls CORS strictness.

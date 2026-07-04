@@ -180,14 +180,23 @@ class TestEmptyAndMalformed:
                 json.load(f)
 
 
+def _empty_db_mock():
+    """AsyncSession mock whose dedup query finds no existing documents."""
+    mock_db = AsyncMock()
+    mock_db.flush = AsyncMock()
+    mock_db.refresh = AsyncMock()
+    mock_db.add = MagicMock()
+    empty_result = MagicMock()
+    empty_result.all.return_value = []
+    mock_db.execute = AsyncMock(return_value=empty_result)
+    return mock_db
+
+
 class TestFullIngest:
     @pytest.mark.asyncio
     async def test_ingest_creates_documents(self, ingester):
         """Full ingest should create documents in the DB."""
-        mock_db = AsyncMock()
-        mock_db.flush = AsyncMock()
-        mock_db.refresh = AsyncMock()
-        mock_db.add = MagicMock()
+        mock_db = _empty_db_mock()
 
         stats = await ingester.ingest(mock_db)
 
@@ -198,11 +207,30 @@ class TestFullIngest:
     @pytest.mark.asyncio
     async def test_ingest_handles_malformed_gracefully(self, ingester):
         """Ingest should not crash on malformed JSON, just increment errors."""
-        mock_db = AsyncMock()
-        mock_db.flush = AsyncMock()
-        mock_db.refresh = AsyncMock()
-        mock_db.add = MagicMock()
+        mock_db = _empty_db_mock()
 
         stats = await ingester.ingest(mock_db)
         assert stats["errors"] >= 1  # malformed.json should cause an error
         assert stats["documents_created"] > 0  # other files still processed
+
+    @pytest.mark.asyncio
+    async def test_reingest_export_is_idempotent(self):
+        """Uploading the same export twice must not duplicate documents.
+
+        Regression: the AcmeTech export was ingested twice and every
+        Slack document was duplicated, doubling cluster sizes and
+        inflating corroboration scores.
+        """
+        from tests.conftest import TestSessionLocal
+
+        async with TestSessionLocal() as db:
+            first = await SlackExportIngester(FIXTURE_DIR).ingest(db)
+            await db.commit()
+            second = await SlackExportIngester(FIXTURE_DIR).ingest(db)
+            await db.commit()
+
+        assert first["documents_created"] > 0
+        assert second["documents_created"] == 0
+        assert (
+            second["documents_skipped_existing"] == first["documents_created"]
+        )

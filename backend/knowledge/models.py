@@ -137,6 +137,32 @@ class SkillDocument(Base):
     )
 
 
+class PendingCluster(Base):
+    """A topic cluster that was identified at ingestion time but NOT
+    extracted (lazy extraction only pre-extracts the largest clusters).
+
+    Holds cluster metadata only — no LLM call has been made. When a query
+    matches one of its documents, the cluster is extracted live, the skill
+    is cached, and status flips to "extracted" so it is never re-extracted.
+    """
+
+    __tablename__ = "pending_clusters"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    cluster_id: Mapped[int] = mapped_column(Integer)
+    topic: Mapped[str] = mapped_column(String(500))
+    document_ids: Mapped[list] = mapped_column(JSON, default=list)
+    document_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(
+        String(50), default="pending", index=True
+    )  # pending, extracted
+    skill_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("skills.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    extracted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
 class Feedback(Base):
     __tablename__ = "feedback"
 

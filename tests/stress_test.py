@@ -26,7 +26,6 @@ import csv
 import io
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,7 +44,7 @@ os.environ["DATABASE_URL"] = STRESS_DB_URL
 os.environ["CHROMA_PERSIST_DIR"] = str(TMP_DIR / "chroma")
 
 import httpx  # noqa: E402
-from sqlalchemy import func, select, text  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     async_sessionmaker,
     create_async_engine,

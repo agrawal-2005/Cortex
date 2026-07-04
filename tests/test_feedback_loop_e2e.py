@@ -36,27 +36,30 @@ def _skill_json(sla_hours: int) -> str:
             "description": "How support tickets are triaged and answered.",
             "department": "support",
             "roles_involved": ["support engineer"],
+            # Citation IDs need not resolve to real documents (unknown IDs
+            # are skipped at persistence), but the validator requires every
+            # step to cite at least one.
             "steps": [
                 {
                     "step_order": 1,
                     "action": "Triage the incoming ticket",
                     "details": {"explanation": "Assign severity."},
-                    "source_document_ids": [],
-                    "source_snippets": [],
+                    "source_document_ids": ["ticket-thread-0"],
+                    "source_snippets": ["customer asked about response SLA"],
                 },
                 {
                     "step_order": 2,
                     "action": f"Respond within the SLA — SLA is {sla_hours} hours",
                     "details": {"explanation": f"SLA is {sla_hours} hours."},
-                    "source_document_ids": [],
-                    "source_snippets": [],
+                    "source_document_ids": ["ticket-thread-1"],
+                    "source_snippets": [f"SLA is {sla_hours} hours"],
                 },
                 {
                     "step_order": 3,
                     "action": "Close the ticket after confirmation",
                     "details": {"explanation": "Ask the customer to confirm."},
-                    "source_document_ids": [],
-                    "source_snippets": [],
+                    "source_document_ids": ["ticket-thread-2"],
+                    "source_snippets": ["ask the customer to confirm"],
                 },
             ],
             "edge_cases": [],

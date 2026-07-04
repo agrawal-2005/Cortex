@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, Loader2, Terminal } from 'lucide-react'
 import {
   getDocumentSourceTypes, uploadSlackExport, uploadFile, ingestGitHub,
-  uploadDiscordExport, ingestDiscordLive, clusterDocuments, extractAllClusters,
+  uploadDiscordExport, ingestDiscordLive,
   getIngestStatus, uploadJiraExport, uploadConfluenceExport,
 } from '../api/client'
 import { sourceKeyOf } from '../lib/ui'
@@ -385,8 +385,10 @@ export default function Sources() {
 
   useEffect(() => { refreshConnected() }, [refreshConnected])
 
-  // After ingestion: refresh badges, then run clustering + skill extraction.
-  const finishIngest = useCallback(async (label, count, stats) => {
+  // After ingestion: refresh badges and report the lazy-extraction result
+  // (the backend clusters everything and pre-extracts only the top
+  // clusters during the ingest request — no extra calls needed here).
+  const finishIngest = useCallback(async (label, count, stats, extraction) => {
     if (stats?.rate_limited) {
       toast(
         'Rate limit hit — this was a partial sync. Add an access token and sync again to fetch everything.',
@@ -396,20 +398,11 @@ export default function Sources() {
     }
     refreshConnected()
     toast(`${count} documents ingested from ${label}.`)
-    setProgress({ stage: 'extracting', label: `✅ ${count} documents ingested. Extracting skills…` })
-    try {
-      const clusterRes = await clusterDocuments()
-      const clusters = clusterRes.data?.clusters || []
-      let skillCount = 0
-      if (clusters.length) {
-        const extractRes = await extractAllClusters(clusters)
-        skillCount = extractRes.data?.skills_extracted ?? 0
-      }
-      setProgress({ stage: 'done', label: `✅ ${count} documents ingested. `, skills: skillCount })
-      if (skillCount) toast(`${skillCount} skills extracted.`)
-    } catch {
-      setProgress({ stage: 'done', label: `✅ ${count} documents ingested.` })
-      toast('Skill extraction could not run automatically — trigger it from Settings.', 'warning', 6000)
+    const skillCount = extraction?.skills_extracted ?? 0
+    const pendingCount = extraction?.pending_topics ?? 0
+    setProgress({ stage: 'done', label: `✅ ${count} documents ingested. `, skills: skillCount })
+    if (skillCount || pendingCount) {
+      toast(`${skillCount} skills ready · ${pendingCount} topics available on demand.`)
     }
   }, [refreshConnected, toast])
 
@@ -443,7 +436,12 @@ export default function Sources() {
       return
     }
     const p = task.progress || {}
-    await finishIngest(label, p.documents_ingested ?? p.documents_created ?? 0, p.stats)
+    await finishIngest(
+      label,
+      p.documents_ingested ?? p.documents_created ?? 0,
+      p.stats,
+      p.extraction,
+    )
   }, [finishIngest, toast])
 
   // Shared ingest flow: run the request, then trigger skill extraction.
@@ -471,7 +469,12 @@ export default function Sources() {
     }
     const count = d.documents_ingested ?? d.documents_created
       ?? d.progress?.documents_ingested ?? d.progress?.documents_created ?? 0
-    await finishIngest(label, count, d.stats ?? d.progress?.stats)
+    await finishIngest(
+      label,
+      count,
+      d.stats ?? d.progress?.stats,
+      d.extraction ?? d.progress?.extraction,
+    )
   }, [finishIngest, trackIngestTask, toast])
 
   // On mount: resume tracking an ingest that was running before a reload.

@@ -5,6 +5,7 @@ from datetime import datetime
 import pytest
 
 from backend.ingestion.confluence_json_ingester import ConfluenceJsonIngester
+from backend.ingestion.github_json_ingester import GitHubJsonIngester
 from backend.ingestion.jira_json_ingester import JiraJsonIngester
 
 
@@ -155,3 +156,119 @@ class TestConfluenceJsonIngester:
     async def test_rejects_wrong_shape(self):
         with pytest.raises(ValueError, match="pages"):
             await ConfluenceJsonIngester().parse_export({"issues": []})
+
+
+# ── GitHub ────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def github_export():
+    return {
+        "repo": "acmetech/platform",
+        "export_date": "2026-06-30",
+        "items": [
+            {
+                "number": 111,
+                "title": "fix(billing): double refund on rapid retry",
+                "body": "Adds SELECT FOR UPDATE on the refund row.\n\n"
+                "Fixes ACME-221",
+                "state": "merged",
+                "user": {"login": "priya.sharma"},
+                "created_at": "2026-06-10T09:00:00Z",
+                "labels": ["bug", "billing"],
+                "comments": [
+                    {
+                        "user": {"login": "marcus.webb"},
+                        "body": "LGTM. Squash-merge per our review policy.",
+                        "created_at": "2026-06-10T15:00:00Z",
+                    },
+                    {"user": {"login": "lucy.tran"}, "body": "", "created_at": ""},
+                ],
+                "html_url": "https://github.com/acmetech/platform/pull/111",
+                "pull_request": {"merged_at": "2026-06-11T10:00:00Z"},
+            },
+            {
+                "number": 136,
+                "title": "Postmortem: DB connection pool exhaustion",
+                "body": "Timeline and action items. Related: ACME-233",
+                "state": "closed",
+                "user": {"login": "raj.patel"},
+                "created_at": "2026-06-12T08:00:00Z",
+                "labels": [{"name": "postmortem"}],  # API dict shape
+                "comments": [],
+            },
+            {"number": 999, "title": ""},  # skipped: no title
+            "not-a-dict",  # skipped
+        ],
+    }
+
+
+class TestGitHubJsonIngester:
+    @pytest.mark.asyncio
+    async def test_parses_items_and_skips_invalid(self, github_export):
+        ingester = GitHubJsonIngester()
+        docs = await ingester.parse_export(github_export)
+        assert len(docs) == 2
+        assert ingester.stats == {
+            "prs": 1,
+            "issues": 1,
+            "comments": 1,
+            "skipped": 2,
+        }
+
+    @pytest.mark.asyncio
+    async def test_pr_document_fields(self, github_export):
+        docs = await GitHubJsonIngester().parse_export(github_export)
+        pr = docs[0]
+        assert pr.source_type == "github_pr"
+        assert pr.source_id == "acmetech/platform#111"
+        assert pr.source_link == "https://github.com/acmetech/platform/pull/111"
+        assert pr.source_label == "acmetech/platform pr #111"
+        assert pr.channel_or_project == "acmetech/platform"
+        assert pr.author_name == "priya.sharma"
+        assert pr.created_at == datetime(2026, 6, 10, 9, 0)
+        assert pr.created_at.tzinfo is None
+
+    @pytest.mark.asyncio
+    async def test_issue_document_fields(self, github_export):
+        docs = await GitHubJsonIngester().parse_export(github_export)
+        iss = docs[1]
+        assert iss.source_type == "github_issue"
+        assert iss.source_id == "acmetech/platform#136"
+        # no html_url in fixture → synthesized issues link
+        assert iss.source_link == (
+            "https://github.com/acmetech/platform/issues/136"
+        )
+        assert iss.author_name == "raj.patel"
+
+    @pytest.mark.asyncio
+    async def test_content_matches_live_ingester_format(self, github_export):
+        docs = await GitHubJsonIngester().parse_export(github_export)
+        content = docs[0].content
+        # same "PR #N: title" header and "--- Comments ---" separator as
+        # the live GitHubIngester, so clustering/_clean_text treat both
+        # identically
+        assert content.startswith(
+            "PR #111: fix(billing): double refund on rapid retry"
+        )
+        assert "State: merged | Labels: bug, billing" in content
+        assert "Fixes ACME-221" in content
+        assert "--- Comments ---" in content
+        assert "[marcus.webb]: LGTM. Squash-merge per our review policy." in content
+
+    @pytest.mark.asyncio
+    async def test_label_dicts_are_flattened(self, github_export):
+        docs = await GitHubJsonIngester().parse_export(github_export)
+        assert "Labels: postmortem" in docs[1].content
+
+    @pytest.mark.asyncio
+    async def test_accepts_bare_list(self, github_export):
+        docs = await GitHubJsonIngester().parse_export(github_export["items"])
+        assert len(docs) == 2
+        # bare list has no repo field → default repo used
+        assert docs[0].source_id == "acmetech/platform#111"
+
+    @pytest.mark.asyncio
+    async def test_rejects_wrong_shape(self):
+        with pytest.raises(ValueError, match="items"):
+            await GitHubJsonIngester().parse_export({"pages": []})

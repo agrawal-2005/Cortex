@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +17,7 @@ from backend.knowledge.models import (
 )
 from backend.processing.embedder import COLLECTION_NAME as DOC_COLLECTION
 from backend.processing.embeddings import EmbeddingService
+from backend.processing.lazy_extraction import LazyExtractionService
 from backend.processing.renderer import render_skill_plain
 from backend.schemas import (
     MatchedDocument,
@@ -116,6 +115,17 @@ async def query_knowledge(
     # 4. Map the matched documents back to the skill extracted from
     #    their cluster (skill_documents), falling back to LLM citations.
     skill = await _find_best_skill(db, doc_relevance, query_embedding)
+
+    # 4b. Lazy extraction: no skill exists yet for these documents. If
+    #     they belong to a pending cluster, extract that ONE cluster live
+    #     and cache it; if they belong to no cluster, extract ad hoc from
+    #     the matched documents. Either way the result is persisted, so
+    #     the next identical query resolves via skill_documents with no
+    #     LLM call.
+    if skill is None:
+        skill = await LazyExtractionService().extract_on_demand(
+            db, doc_relevance, topic_hint=question
+        )
 
     if skill is None:
         matched = await _matched_documents(db, doc_relevance)
@@ -246,6 +256,10 @@ async def _find_best_skill(
         select(Skill)
         .options(selectinload(Skill.steps).selectinload(SkillStep.sources))
         .where(Skill.id.in_(max_rel.keys()))
+        # Repeatability-filter rejections carry provenance rows (so their
+        # clusters are never re-extracted) but must never be returned as
+        # an answer.
+        .where(Skill.status != "rejected-not-repeatable")
     )
     skills = result.scalars().all()
     if not skills:

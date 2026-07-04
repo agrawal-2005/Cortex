@@ -44,6 +44,10 @@ export function getExecutableSkill(id) {
   return api.get(`/skills/${id}/executable`)
 }
 
+export function getSkillStats() {
+  return api.get('/skills/stats')
+}
+
 export function createSkill(data) {
   return v1.post('/skills/', data)
 }
@@ -134,12 +138,11 @@ export function ingestDiscordLive({ guildId, channelIds, botToken }) {
 
 const v1Processing = withAuth(axios.create({ baseURL: '/api/v1/processing' }))
 
-export function clusterDocuments(limit = 500) {
-  return v1Processing.post('/cluster', null, { params: { limit } })
-}
-
-export function extractAllClusters(clusters) {
-  return v1Processing.post('/extract-all', clusters)
+// Cluster everything, pre-extract only the top clusters; the rest become
+// pending topics answered on demand at query time. Runs automatically
+// after ingestion — this is the manual trigger.
+export function runLazyExtraction() {
+  return v1Processing.post('/lazy-extract')
 }
 
 // ── Query ───────────────────────────────────────────────────────────────────

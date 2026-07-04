@@ -21,10 +21,15 @@ from backend.ingestion.confluence_json_ingester import ConfluenceJsonIngester
 from backend.ingestion.discord_ingester import DiscordIngester
 from backend.ingestion.file_upload_ingester import FileUploadIngester
 from backend.ingestion.github_ingester import GitHubIngester
+from backend.ingestion.github_json_ingester import GitHubJsonIngester
 from backend.ingestion.jira_json_ingester import JiraJsonIngester
 from backend.ingestion.slack_ingester import SlackExportIngester
 from backend.models import Document
 from backend.processing.embedder import DocumentEmbedder
+from backend.processing.lazy_extraction import (
+    ExtractionInProgressError,
+    LazyExtractionService,
+)
 from backend.security.validation import redact_secrets, validate_upload
 from backend.schemas import (
     DiscordLiveIngestRequest,
@@ -47,6 +52,28 @@ def _set_task(task_id: str, **kwargs: Any) -> None:
         "updated_at": datetime.now(timezone.utc).isoformat(),
         **kwargs,
     }
+
+
+async def _post_ingest_extraction(db: AsyncSession) -> dict[str, Any] | None:
+    """Run lazy extraction after new documents were stored.
+
+    Clusters everything (cheap) and pre-extracts only the top
+    PRE_EXTRACT_TOP_N clusters; the rest become pending topics answered
+    on demand at query time. Never fails the ingest request — extraction
+    errors are logged and the summary is simply omitted.
+    """
+    try:
+        return await LazyExtractionService().cluster_and_pre_extract(db)
+    except ExtractionInProgressError:
+        # Another ingest already triggered extraction — the new documents
+        # stay unclustered until the next run or an on-demand query.
+        logger.info("Post-ingest extraction skipped: run already in progress")
+        return None
+    except Exception as exc:  # noqa: BLE001 — ingest must survive this
+        logger.error(
+            "Post-ingest lazy extraction failed: %s", redact_secrets(str(exc))
+        )
+        return None
 
 
 # ── POST /slack — Upload Slack export ZIP ─────────────────────────────────
@@ -99,7 +126,10 @@ async def ingest_slack_export(
         _set_task(task_id, status="running", progress={"stage": "ingesting"})
         stats = await ingester.ingest(db)
 
-        _set_task(task_id, status="completed", progress=stats)
+        _set_task(task_id, status="running", progress={**stats, "stage": "extracting"})
+        extraction = await _post_ingest_extraction(db)
+
+        _set_task(task_id, status="completed", progress={**stats, "extraction": extraction})
         logger.info("Slack ingestion task %s completed: %s", task_id, stats)
 
     except Exception as exc:
@@ -149,6 +179,9 @@ async def ingest_file(
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("detail", "Unknown error"))
 
+    if result.get("documents_created"):
+        result["extraction"] = await _post_ingest_extraction(db)
+
     return result
 
 
@@ -174,12 +207,24 @@ async def _run_github_ingest(task_id: str, payload: GitHubIngestRequest) -> None
         async with async_session_factory() as db:
             ingested = await _store_documents(docs, db)
             await db.commit()
+            extraction = None
+            if ingested:
+                _set_task(
+                    task_id,
+                    status="running",
+                    progress={
+                        "stage": "extracting",
+                        "documents_ingested": ingested,
+                    },
+                )
+                extraction = await _post_ingest_extraction(db)
         _set_task(
             task_id,
             status="completed",
             progress={
                 "documents_ingested": ingested,
                 "stats": ingester.stats,
+                "extraction": extraction,
             },
         )
         logger.info(
@@ -275,10 +320,12 @@ async def ingest_discord_export(
         raise HTTPException(status_code=400, detail=str(exc))
 
     ingested = await _store_documents(docs, db)
+    extraction = await _post_ingest_extraction(db) if ingested else None
     return {
         "status": "success",
         "documents_ingested": ingested,
         "stats": ingester.stats,
+        "extraction": extraction,
     }
 
 
@@ -319,10 +366,12 @@ async def ingest_discord_live(
         )
 
     ingested = await _store_documents(docs, db)
+    extraction = await _post_ingest_extraction(db) if ingested else None
     return {
         "status": "success",
         "documents_ingested": ingested,
         "stats": ingester.stats,
+        "extraction": extraction,
     }
 
 
@@ -358,10 +407,12 @@ async def ingest_jira_export(
         raise HTTPException(status_code=400, detail=str(exc))
 
     ingested = await _store_documents(docs, db)
+    extraction = await _post_ingest_extraction(db) if ingested else None
     return {
         "status": "success",
         "documents_ingested": ingested,
         "stats": ingester.stats,
+        "extraction": extraction,
     }
 
 
@@ -398,10 +449,55 @@ async def ingest_confluence_export(
         raise HTTPException(status_code=400, detail=str(exc))
 
     ingested = await _store_documents(docs, db)
+    extraction = await _post_ingest_extraction(db) if ingested else None
     return {
         "status": "success",
         "documents_ingested": ingested,
         "stats": ingester.stats,
+        "extraction": extraction,
+    }
+
+
+# ── POST /github/upload — GitHub JSON export ──────────────────────────────
+
+
+@router.post(
+    "/github/upload",
+    summary="Upload a GitHub JSON export",
+    description=(
+        "Accepts a `.json` file with an `items` array of PRs and issues "
+        "in GitHub REST API shape (number, title, body, state, "
+        "user.login, labels, comments; PRs carry a `pull_request` key) "
+        "and ingests each item as a Document with "
+        "`source_type='github_pr'` or `'github_issue'`. No GitHub API "
+        "calls are made — the file is the source of truth."
+    ),
+)
+async def ingest_github_export(
+    file: UploadFile = File(..., description="GitHub export .json file"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    raw = await file.read()
+    validate_upload(file.filename or "", len(raw), {".json"})
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}")
+
+    ingester = GitHubJsonIngester()
+    try:
+        docs = await ingester.parse_export(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    ingested = await _store_documents(docs, db)
+    extraction = await _post_ingest_extraction(db) if ingested else None
+    return {
+        "status": "success",
+        "documents_ingested": ingested,
+        "stats": ingester.stats,
+        "extraction": extraction,
     }
 
 

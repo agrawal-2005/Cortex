@@ -68,8 +68,9 @@ STRICT_FORMAT_REMINDER = (
     "truncation. Either the rejection object "
     '{"is_skill": false, "reason": "..."} or a skill object containing a '
     f'"steps" array with at least {MIN_SKILL_STEPS} step objects, each '
-    "citing source documents. Do not include any text before or after the "
-    "JSON object."
+    'with a non-empty "source_document_ids" array citing the document '
+    "ID(s) it was derived from. Do not include any text before or after "
+    "the JSON object."
 )
 
 
@@ -132,6 +133,64 @@ def _http_status_of(exc: BaseException) -> int | None:
     return None
 
 
+def _normalize_step_citations(parsed: dict[str, Any]) -> None:
+    """Hoist citations the LLM misplaced inside step ``details``.
+
+    The schema puts ``source_document_ids``/``source_snippets`` at the step
+    top level (where scoring and StepSource persistence read them), but
+    models sometimes nest them inside ``details`` instead — which would make
+    the citations invisible to ``_score_step`` and ``_persist_skill``.
+    """
+    steps = parsed.get("steps")
+    if not isinstance(steps, list):
+        return
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        details = step.get("details")
+        if not isinstance(details, dict):
+            continue
+        for key in ("source_document_ids", "source_snippets"):
+            if not step.get(key) and details.get(key):
+                step[key] = details.pop(key)
+
+
+def _step_is_risky(step_data: dict[str, Any]) -> bool:
+    """True if this step's action/tool/command moves money or destroys state."""
+    details = step_data.get("details") or {}
+    tool = details.get("tool") or {}
+    text = " ".join(
+        str(part)
+        for part in (
+            step_data.get("action"),
+            details.get("explanation"),
+            tool.get("name"),
+            tool.get("method"),
+            details.get("command"),
+        )
+        if part
+    )
+    return bool(_RISKY_STEP_PATTERN.search(text))
+
+
+def _step_approval_gate(step_data: dict[str, Any]) -> Any:
+    """Return the step's approval_gate if present and non-empty."""
+    return (step_data.get("details") or {}).get("approval_gate") or None
+
+
+def _step_sources_demand_approval(
+    step_data: dict[str, Any], doc_lookup: dict[str, Document]
+) -> bool:
+    """True if any document cited by this step contains approval language."""
+    for doc_id in step_data.get("source_document_ids") or []:
+        doc = doc_lookup.get(doc_id)
+        if doc is not None and _APPROVAL_LANGUAGE_PATTERN.search(
+            doc.content or ""
+        ):
+            return True
+    return False
+
+
 def _validate_skill_schema(parsed: dict[str, Any]) -> None:
     """Reject LLM output that parses as JSON but is not a usable skill."""
     if not isinstance(parsed, dict):
@@ -149,6 +208,14 @@ def _validate_skill_schema(parsed: dict[str, Any]) -> None:
         raise SchemaValidationError(
             f"skill has {len(steps)} step(s); at least {MIN_SKILL_STEPS} required"
         )
+    for idx, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise SchemaValidationError(f"step {idx + 1} is not an object")
+        if not (step.get("source_document_ids") or []):
+            raise SchemaValidationError(
+                f"step {idx + 1} has an empty source_document_ids; every "
+                "step must cite the source document(s) it was derived from"
+            )
 
 # ── Confidence-scoring constants ──────────────────────────────────────────
 
@@ -181,6 +248,33 @@ _EVIDENCE_WEIGHTS: dict[str, float] = {
     "slack": 0.03,   # Informal conversation
 }
 _EVIDENCE_DEFAULT = 0.02
+
+# Steps whose action/tool/command matches this pattern move money, destroy
+# state, or touch production; a skill containing one must carry an
+# approval_gate on at least one step before it can be marked safe to
+# automate. Deliberately broad — vague step wording ("Mitigate issue") must
+# still trip it in an incident/production context.
+_RISKY_STEP_PATTERN = re.compile(
+    r"refund|payment|payout|charge|credit note|chargeback"
+    r"|delete|drop\b|destroy|terminate|wipe"
+    r"|deploy|rollback|roll\s+back|hotfix|merge[- ]to[- ]prod"
+    r"|mitigat|incident|production",
+    re.IGNORECASE,
+)
+
+# Approval language in SOURCE documents. Steps are often worded vaguely
+# ("Mitigate issue") while the citation's source text carries the real
+# requirement ("get 1 approval, merge with [HOTFIX] prefix"). If a step's
+# cited source contains approval language but the step has no
+# approval_gate, the skill must not be marked safe to automate.
+_APPROVAL_LANGUAGE_PATTERN = re.compile(
+    r"get\s+(?:\w+\s+)?approvals?"        # "get approval", "get 1 approval"
+    r"|requires?\s+sign[-\s]?off"
+    r"|\d+\s+approvals?\b"                # "2 approvals per the review policy"
+    r"|loop\s+in"
+    r"|before\s+processing",
+    re.IGNORECASE,
+)
 
 # Base + max totals
 _BASE_CONFIDENCE = 0.40
@@ -311,24 +405,60 @@ class SkillExtractionPipeline:
         )
     """
 
-    def __init__(self) -> None:
-        self._llm: HuggingFaceEndpoint | None = None
+    def __init__(self, groq_model: str | None = None) -> None:
+        """Args:
+            groq_model: Optional override for settings.GROQ_MODEL — used by
+                on-demand extraction at query time, which runs a larger
+                model (settings.GROQ_LIVE_MODEL) for a single cluster.
+                Only applies when LLM_PROVIDER is "groq".
+        """
+        self._llm: Any = None
         self._chain: Any = None
+        self._groq_model = groq_model
 
     # ── LLM setup ─────────────────────────────────────────────────────
 
-    def _get_llm(self) -> HuggingFaceEndpoint:
+    def _get_llm(self) -> Any:
+        """Build the chat model for the configured LLM_PROVIDER.
+
+        Providers: "huggingface" (default), "groq" (hosted, generous free
+        tier), "ollama" (local, no API key).
+        """
         if self._llm is None:
-            endpoint = HuggingFaceEndpoint(
-                repo_id=settings.LLM_MODEL,
-                huggingfacehub_api_token=settings.HUGGINGFACE_API_TOKEN,
-                max_new_tokens=3072,
-                temperature=0.1,
-                repetition_penalty=1.1,
-            )
-            # HF Inference Providers only expose chat models via the
-            # chat-completions ("conversational") API, so wrap the endpoint.
-            self._llm = ChatHuggingFace(llm=endpoint)
+            provider = settings.LLM_PROVIDER.lower()
+            if provider == "groq":
+                from langchain_groq import ChatGroq
+
+                self._llm = ChatGroq(
+                    api_key=settings.GROQ_API_KEY,
+                    model=self._groq_model or settings.GROQ_MODEL,
+                    temperature=0.1,
+                    max_tokens=3072,
+                )
+            elif provider == "ollama":
+                from langchain_community.chat_models import ChatOllama
+
+                self._llm = ChatOllama(
+                    model=settings.OLLAMA_MODEL,
+                    base_url=settings.OLLAMA_BASE_URL,
+                    temperature=0.1,
+                )
+            elif provider == "huggingface":
+                endpoint = HuggingFaceEndpoint(
+                    repo_id=settings.LLM_MODEL,
+                    huggingfacehub_api_token=settings.HUGGINGFACE_API_TOKEN,
+                    max_new_tokens=3072,
+                    temperature=0.1,
+                    repetition_penalty=1.1,
+                )
+                # HF Inference Providers only expose chat models via the
+                # chat-completions ("conversational") API, so wrap it.
+                self._llm = ChatHuggingFace(llm=endpoint)
+            else:
+                raise ValueError(
+                    f"Unknown LLM_PROVIDER {settings.LLM_PROVIDER!r} — "
+                    "expected 'huggingface', 'ollama', or 'groq'"
+                )
         return self._llm
 
     def _get_chain(self) -> Any:
@@ -454,6 +584,7 @@ class SkillExtractionPipeline:
                     raise EmptyLLMResponseError("LLM returned an empty response")
                 cleaned = _sanitize_json(raw)
                 parsed: dict[str, Any] = json.loads(cleaned)
+                _normalize_step_citations(parsed)
                 _validate_skill_schema(parsed)
                 return parsed
             except asyncio.TimeoutError as exc:
@@ -615,6 +746,55 @@ class SkillExtractionPipeline:
             "roles_involved": parsed.get("roles_involved") or [],
         }
 
+        # --- Safety gate: risky skills need an approval gate ---
+        # A skill that moves money or destroys state must never be marked
+        # safe to automate unless at least one step carries an approval_gate.
+        # The LLM's own safe_to_automate judgment is not trusted here.
+        automation_readiness = parsed.get("automation_readiness") or {}
+        if any(_step_is_risky(s) for s in raw_steps) and not any(
+            _step_approval_gate(s) for s in raw_steps
+        ):
+            automation_readiness["safe_to_automate"] = False
+            missing = automation_readiness.get("missing_for_automation") or []
+            note = (
+                "missing approval gate: skill uses a money-moving or "
+                "destructive tool but no step has an approval_gate"
+            )
+            if note not in missing:
+                missing.append(note)
+            automation_readiness["missing_for_automation"] = missing
+            logger.warning(
+                "Skill '%s' uses a risky tool with no approval_gate — "
+                "forcing safe_to_automate=false",
+                parsed.get("name") or topic_label,
+            )
+
+        # --- Safety gate 2: sources demand approval the step didn't capture.
+        # More robust than keyword-matching the step text: the cited SOURCE
+        # content is where the real approval requirement lives, however
+        # vaguely the step itself is worded.
+        # Like gate 1, a gate captured on ANY step satisfies the skill —
+        # sibling steps legitimately cite the same source document.
+        demanding = [
+            s for s in raw_steps if _step_sources_demand_approval(s, doc_lookup)
+        ]
+        if demanding and not any(_step_approval_gate(s) for s in raw_steps):
+            automation_readiness["safe_to_automate"] = False
+            missing = automation_readiness.get("missing_for_automation") or []
+            note = (
+                "approval language detected in source but not captured"
+            )
+            if note not in missing:
+                missing.append(note)
+            automation_readiness["missing_for_automation"] = missing
+            logger.warning(
+                "Skill '%s': %d step(s) cite sources containing approval "
+                "language but carry no approval_gate — forcing "
+                "safe_to_automate=false",
+                parsed.get("name") or topic_label,
+                len(demanding),
+            )
+
         skill = Skill(
             id=str(uuid.uuid4()),
             name=parsed.get("name") or topic_label,
@@ -626,7 +806,7 @@ class SkillExtractionPipeline:
             skill_data=skill_data,
             trigger=parsed.get("trigger"),
             inputs_schema=parsed.get("inputs_schema") or {},
-            automation_readiness=parsed.get("automation_readiness") or {},
+            automation_readiness=automation_readiness,
             is_repeatable=bool(parsed.get("is_repeatable", True)),
         )
         db.add(skill)
@@ -773,6 +953,13 @@ class SkillExtractionPipeline:
                 is_repeatable=False,
             )
             db.add(rejected)
+            await db.flush()
+            # Record cluster provenance for the rejection too: coverage
+            # checks (lazy extraction) and the query route use these rows
+            # to know this cluster was already evaluated — a rejected
+            # topic must never be silently re-extracted.
+            for doc in documents:
+                db.add(SkillDocument(skill_id=rejected.id, document_id=doc.id))
             await db.flush()
             logger.info(
                 "Cluster '%s' rejected by repeatability filter: %s",

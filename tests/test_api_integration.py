@@ -53,7 +53,7 @@ async def test_create_and_list_skills(client):
     }
     create_res = await client.post("/api/v1/skills/", json=skill_data)
     assert create_res.status_code == 201
-    skill_id = create_res.json()["id"]
+    assert create_res.json()["id"]
 
     # List via v2
     list_res = await client.get("/api/skills/")
