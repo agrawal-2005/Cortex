@@ -65,9 +65,11 @@ STRICT_FORMAT_REMINDER = (
     "\n\n## STRICT FORMAT REMINDER\n"
     "Your previous response could not be used. You MUST respond with ONLY "
     "one complete, valid JSON object — no prose, no markdown fences, no "
-    "truncation. The object MUST contain a \"steps\" array with at least "
-    f"{MIN_SKILL_STEPS} step objects, each citing source documents. Do not "
-    "include any text before or after the JSON object."
+    "truncation. Either the rejection object "
+    '{"is_skill": false, "reason": "..."} or a skill object containing a '
+    f'"steps" array with at least {MIN_SKILL_STEPS} step objects, each '
+    "citing source documents. Do not include any text before or after the "
+    "JSON object."
 )
 
 
@@ -134,6 +136,10 @@ def _validate_skill_schema(parsed: dict[str, Any]) -> None:
     """Reject LLM output that parses as JSON but is not a usable skill."""
     if not isinstance(parsed, dict):
         raise SchemaValidationError("response is not a JSON object")
+    # Repeatability gate: {"is_skill": false, "reason": "..."} is a valid,
+    # complete response — the cluster is a one-time project, not a skill.
+    if parsed.get("is_skill") is False:
+        return
     steps = parsed.get("steps")
     if steps is None:
         raise SchemaValidationError('missing required "steps" field')
@@ -178,7 +184,11 @@ _EVIDENCE_DEFAULT = 0.02
 
 # Base + max totals
 _BASE_CONFIDENCE = 0.40
-_MAX_CORROBORATION = 0.05
+# Corroboration is the per-step differentiator: it counts the distinct
+# documents supporting *this* step, so steps in the same skill get
+# different scores based on how well-evidenced each one is.
+_CORROBORATION_PER_DOC = 0.05
+_MAX_CORROBORATION = 0.15
 _REVIEW_THRESHOLD = 0.80
 
 
@@ -515,13 +525,14 @@ class SkillExtractionPipeline:
     ) -> float:
         """Calculate confidence for a single extracted step.
 
-        Scoring breakdown (max 1.0):
+        Scoring breakdown (capped at 1.0):
         - Base score:          0.40  (LLM was able to extract the step)
         - Source recency:      up to 0.15  (newer documents → higher)
         - Author authority:    up to 0.15  (senior roles → higher)
         - Source trust:        up to 0.15  (trust table scores)
         - Evidence type:       up to 0.10  (jira > docs > chat)
-        - Corroboration:       up to 0.05  (multiple sources agree)
+        - Corroboration:       up to 0.15  (0.05 per extra distinct document
+          citing THIS step — the per-step differentiator)
         """
         # LLMs sometimes emit explicit nulls ("source_document_ids": null);
         # .get() with a default does not cover that, so coalesce with `or`.
@@ -548,9 +559,10 @@ class SkillExtractionPipeline:
         # Evidence type — best among cited documents
         evidence = max(_evidence_weight(d.source_type) for d in cited_docs)
 
-        # Corroboration — bonus for multiple distinct sources
+        # Corroboration — bonus per distinct document supporting this step
         corroboration = min(
-            _MAX_CORROBORATION, (len(cited_docs) - 1) * 0.02
+            _MAX_CORROBORATION,
+            (len({d.id for d in cited_docs}) - 1) * _CORROBORATION_PER_DOC,
         )
 
         score = (
@@ -612,6 +624,10 @@ class SkillExtractionPipeline:
             confidence=round(overall_confidence, 3),
             version=1,
             skill_data=skill_data,
+            trigger=parsed.get("trigger"),
+            inputs_schema=parsed.get("inputs_schema") or {},
+            automation_readiness=parsed.get("automation_readiness") or {},
+            is_repeatable=bool(parsed.get("is_repeatable", True)),
         )
         db.add(skill)
         await db.flush()
@@ -740,6 +756,29 @@ class SkillExtractionPipeline:
 
         # 5. Call LLM and parse
         parsed = await self._call_llm(topic_label, doc_dicts, feedback_dicts)
+
+        # 5b. Repeatability gate: the LLM judged this cluster a one-time
+        # project, not a repeatable workflow. Persist a rejection marker
+        # (hidden from the main skills list) instead of a skill.
+        if parsed.get("is_skill") is False:
+            reason = parsed.get("reason") or "not a repeatable workflow"
+            rejected = Skill(
+                id=str(uuid.uuid4()),
+                name=topic_label,
+                description=reason,
+                status="rejected-not-repeatable",
+                confidence=0.0,
+                version=1,
+                skill_data={"rejection_reason": reason},
+                is_repeatable=False,
+            )
+            db.add(rejected)
+            await db.flush()
+            logger.info(
+                "Cluster '%s' rejected by repeatability filter: %s",
+                topic_label, reason,
+            )
+            return rejected
 
         # 6. Persist with confidence scoring
         skill = await self._persist_skill(

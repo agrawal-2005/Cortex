@@ -42,10 +42,20 @@ class Skill(Base):
     name: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="draft")  # draft, review, verified, outdated
+    status: Mapped[str] = mapped_column(String(50), default="draft")  # draft, review, verified, outdated, rejected-not-repeatable
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     version: Mapped[int] = mapped_column(Integer, default=1)
     skill_data: Mapped[dict] = mapped_column(JSON, default=dict)  # full executable skill as JSONB
+    # How the skill is initiated:
+    #   {"type": "event|manual|scheduled", "condition": "...", "event_binding": "..."}
+    trigger: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Parameters the skill needs before it can run:
+    #   {"param": "description and format"}
+    inputs_schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    # {"level": "executable|assisted|reference", "safe_to_automate": bool,
+    #  "missing_for_automation": [...], "requires_human_review": [...]}
+    automation_readiness: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_repeatable: Mapped[bool] = mapped_column(Boolean, default=False)
     extracted_at: Mapped[datetime] = mapped_column(default=_utcnow)
     verified_at: Mapped[datetime | None] = mapped_column(nullable=True)
     verified_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -67,6 +77,20 @@ class SkillStep(Base):
     skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id", ondelete="CASCADE"))
     step_order: Mapped[int] = mapped_column(Integer)
     action: Mapped[str] = mapped_column(Text)
+    # Automation-ready step payload (all keys optional; older skills may only
+    # have "explanation"):
+    #   {
+    #     "explanation": "human-readable description",
+    #     "tool": {"name": "...", "method": "...", "auth_required": "..."},
+    #     "inputs_required": ["repo", "pr_number", ...],
+    #     "parameters": {"key": "value or template like {{input.repo}}"},
+    #     "command": "literal command string if applicable",
+    #     "expected_output": "what success returns",
+    #     "success_criteria": "machine-checkable condition",
+    #     "on_failure": [{"if": "...", "then": "...", "target": "..."}],
+    #     "branch": {"if": "...", "then": "goto step X"},
+    #     "approval_gate": {"if": "...", "require": "who approves"},
+    #   }
     details: Mapped[dict] = mapped_column(JSON, default=dict)  # JSONB
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     depends_on: Mapped[list] = mapped_column(JSON, default=list)  # UUID array stored as JSON

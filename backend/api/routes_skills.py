@@ -31,7 +31,7 @@ router = APIRouter(tags=["skills"])
 async def list_skills(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=500),
-    status: str | None = Query(None, description="Filter: draft, review, verified, outdated"),
+    status: str | None = Query(None, description="Filter: draft, review, verified, outdated, rejected-not-repeatable"),
     department: str | None = Query(None, description="Filter by department"),
     min_confidence: float | None = Query(None, ge=0.0, le=1.0, description="Minimum confidence"),
     search: str | None = Query(None, description="Search in name/description"),
@@ -43,6 +43,10 @@ async def list_skills(
 
     if status:
         query = query.where(Skill.status == status)
+    else:
+        # Clusters rejected by the repeatability filter are kept for audit
+        # but hidden from the main list unless explicitly requested.
+        query = query.where(Skill.status != "rejected-not-repeatable")
     if department:
         query = query.where(Skill.department == department)
     if min_confidence is not None:
@@ -181,6 +185,10 @@ async def get_executable_skill(
         "description": skill.description,
         "department": skill.department,
         "confidence": skill.confidence,
+        "trigger": skill.trigger,
+        "inputs_schema": skill.inputs_schema or {},
+        "automation_readiness": skill.automation_readiness or {},
+        "is_repeatable": skill.is_repeatable,
         "prerequisites": skill_data.get("prerequisites", []),
         "conditions": skill_data.get("conditions", []),
         "roles_required": skill_data.get("roles_involved", []),
@@ -190,9 +198,17 @@ async def get_executable_skill(
                 "order": step.step_order,
                 "action": step.action,
                 "explanation": step.details.get("explanation", ""),
+                "tool": step.details.get("tool"),
                 "tools": step.details.get("tools", []),
+                "inputs_required": step.details.get("inputs_required", []),
+                "parameters": step.details.get("parameters"),
+                "command": step.details.get("command"),
                 "conditions": step.details.get("conditions"),
                 "expected_output": step.details.get("expected_output"),
+                "success_criteria": step.details.get("success_criteria"),
+                "on_failure": step.details.get("on_failure"),
+                "branch": step.details.get("branch"),
+                "approval_gate": step.details.get("approval_gate"),
                 "confidence": step.confidence,
                 "depends_on": step.depends_on,
                 "status": "pending",
