@@ -112,7 +112,10 @@ export default function Settings() {
           <FileText size={15} className="text-text-dim" /> About
         </h2>
         <p className="text-sm text-text-dim leading-relaxed">
-          <span className="gradient-text font-semibold">Cortex</span> turns tribal knowledge
+          <span className="font-medium text-text" style={{ letterSpacing: '-0.5px' }}>
+            corte<span className="text-primary">x</span>
+          </span>{' '}
+          turns tribal knowledge
           into AI automation. Connect your team's tools, and Cortex extracts verified,
           executable workflows that both humans and AI agents can follow.
         </p>

@@ -4,6 +4,7 @@ import {
   CheckCircle2, Plug, Settings,
 } from 'lucide-react'
 import Logo from './Logo'
+import Wordmark from './Wordmark'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -20,7 +21,7 @@ export default function Sidebar() {
       {/* Logo */}
       <NavLink to="/" className="flex items-center gap-3 px-3 md:px-5 h-16 border-b border-border shrink-0">
         <Logo size={36} className="shrink-0" />
-        <span className="hidden md:block text-lg font-bold tracking-tight text-text">Cortex</span>
+        <Wordmark size={24} className="hidden md:block" />
       </NavLink>
 
       {/* Navigation */}
