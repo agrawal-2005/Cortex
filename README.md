@@ -2,7 +2,12 @@
   <img src="docs/assets/logo.svg" alt="Cortex logo" width="96" />
 </p>
 
-<h1 align="center">Cortex</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg" />
+    <img src="docs/assets/wordmark-light.svg" alt="cortex" width="176" />
+  </picture>
+</p>
 
 <p align="center">
   <b>Extract how your company actually works. Turn it into workflows AI agents can run.</b>
@@ -123,7 +128,7 @@ Natural language queries match skills via cluster-level document provenance (not
 | Skills extracted | 28 (from 22/45 clusters) |
 | Confidence range | 0.49 – 0.74 |
 | Automated tests | 206 |
-| CI | GitHub Actions (backend + frontend on every push) |
+| CI | GitHub Actions (backend tests + frontend & website builds on every push) |
 | LLM backends | HuggingFace Inference API + Ollama (local) |
 
 ---
@@ -276,7 +281,7 @@ After ingestion, go to Settings → "Run Skill Extraction" to extract workflows.
 | LLM Framework | LangChain |
 | Clustering | HDBSCAN with boilerplate stripping |
 | Security | API keys (SHA-256), Fernet encryption, rate limiting |
-| CI/CD | GitHub Actions (206 tests + frontend build) |
+| CI/CD | GitHub Actions (206 tests + frontend & website builds) |
 
 **No custom ML models. No training required.** The entire system runs on pre-trained models + prompt engineering + solid software engineering.
 
@@ -409,15 +414,17 @@ Cortex/
 │       ├── routes_query.py       # Query with relevance ranking
 │       ├── routes_feedback.py    # Feedback with trust updates
 │       └── routes_sources.py     # Encrypted source management
-├── frontend/                     # React + Tailwind dashboard
+├── frontend/                     # React + Tailwind dashboard (the product)
+├── website/                      # Marketing landing page (Vite + React + Framer Motion)
 ├── scripts/
 │   ├── create_api_key.py         # Mint API keys
 │   ├── backfill_skill_documents.py
 │   └── purge_orphan_embeddings.py
 ├── tests/                        # 206 automated tests
 ├── alembic/                      # 3 database migrations
+├── LICENSE                       # MIT
 └── docs/
-    └── assets/logo.svg           # Brand mark
+    └── assets/                   # Brand mark + wordmark SVGs
 ```
 
 ---
@@ -435,6 +442,7 @@ Cortex/
 - [x] Security (auth, encryption, rate limiting, CORS, validation)
 - [x] 206 automated tests + CI/CD
 - [x] Performance benchmarks + stress testing
+- [x] Brand identity + marketing landing page (`website/`)
 
 ### Next
 - [ ] Extract remaining clusters (Ollama)
@@ -459,4 +467,4 @@ Every company has hundreds of processes like this. Cortex automates the extracti
 
 ## License
 
-MIT
+[MIT](LICENSE)
