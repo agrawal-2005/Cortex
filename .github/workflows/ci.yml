@@ -130,10 +130,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Node 24 ships npm 11, which generated website/package-lock.json.
+          # npm 10 (Node 20) chokes on its bundled wasm optional deps.
+          node-version: "24"
           cache: npm
           cache-dependency-path: website/package-lock.json
 
