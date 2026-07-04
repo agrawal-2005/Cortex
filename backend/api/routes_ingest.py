@@ -17,9 +17,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory, get_db
+from backend.ingestion.confluence_json_ingester import ConfluenceJsonIngester
 from backend.ingestion.discord_ingester import DiscordIngester
 from backend.ingestion.file_upload_ingester import FileUploadIngester
 from backend.ingestion.github_ingester import GitHubIngester
+from backend.ingestion.jira_json_ingester import JiraJsonIngester
 from backend.ingestion.slack_ingester import SlackExportIngester
 from backend.models import Document
 from backend.processing.embedder import DocumentEmbedder
@@ -315,6 +317,85 @@ async def ingest_discord_live(
         raise HTTPException(
             status_code=502, detail=f"Discord ingestion failed: {safe_error}"
         )
+
+    ingested = await _store_documents(docs, db)
+    return {
+        "status": "success",
+        "documents_ingested": ingested,
+        "stats": ingester.stats,
+    }
+
+
+# ── POST /jira — Jira JSON export ─────────────────────────────────────────
+
+
+@router.post(
+    "/jira",
+    summary="Upload a Jira JSON export",
+    description=(
+        "Accepts a `.json` file with an `issues` array (key, summary, "
+        "description, comments, ...) and ingests each issue as a Document "
+        "with `source_type='jira'`. Content includes the summary, "
+        "description, and all comments with authors and timestamps."
+    ),
+)
+async def ingest_jira_export(
+    file: UploadFile = File(..., description="Jira export .json file"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    raw = await file.read()
+    validate_upload(file.filename or "", len(raw), {".json"})
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}")
+
+    ingester = JiraJsonIngester()
+    try:
+        docs = await ingester.parse_export(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    ingested = await _store_documents(docs, db)
+    return {
+        "status": "success",
+        "documents_ingested": ingested,
+        "stats": ingester.stats,
+    }
+
+
+# ── POST /confluence — Confluence JSON export ─────────────────────────────
+
+
+@router.post(
+    "/confluence",
+    summary="Upload a Confluence JSON export",
+    description=(
+        "Accepts a `.json` file with a `pages` array (id, title, space, "
+        "body, author, created, last_modified, url) and ingests each page "
+        "as a Document with `source_type='confluence'`. Uses "
+        "`last_modified` as the document timestamp for recency-based "
+        "conflict resolution."
+    ),
+)
+async def ingest_confluence_export(
+    file: UploadFile = File(..., description="Confluence export .json file"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    raw = await file.read()
+    validate_upload(file.filename or "", len(raw), {".json"})
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}")
+
+    ingester = ConfluenceJsonIngester()
+    try:
+        docs = await ingester.parse_export(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     ingested = await _store_documents(docs, db)
     return {

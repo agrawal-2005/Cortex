@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "the 'password reset email not arriving' spike is real, ~15 tickets today. escalated in #incidents",
+  "ts": "1780996260.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "zendesk maintenance sunday 2-4am UTC, tickets queue but nothing is lost",
+  "ts": "1781014500.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "TIL you can merge duplicate tickets in zendesk with cmd+shift+m. 3 years using this tool",
+  "ts": "1781020440.000000"
+ }
+]

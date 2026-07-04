@@ -1,0 +1,14 @@
+[
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "new refund macro is live in zendesk, use 'refund-30d' \u2014 it cites the current policy so customers stop quoting the old page at us",
+  "ts": "1780652280.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "psa the 'export my data' feature confuses people, they expect a download but it emails a link. filed a UX suggestion as ACME-273",
+  "ts": "1780669320.000000"
+ }
+]

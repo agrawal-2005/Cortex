@@ -1,0 +1,130 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "Heads up team \u2014 we changed the deploy process last sprint. The Confluence deployment runbook is out of date, don't follow it blindly. New flow: staging -> smoke tests -> canary at 5% -> full prod.",
+  "ts": "1780396920.000000",
+  "thread_ts": "1780396920.000000",
+  "reply_count": 9
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "wait, the runbook says deploy straight to prod after staging? that's what i did for my first deploy :grimacing:",
+  "ts": "1780397040.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "Yeah that page is from November, we added the canary stage after the January outage. I'll update it... eventually :sweat_smile:",
+  "ts": "1780398540.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "When deploying to prod, always run the smoke tests first. `make smoke` against staging. If any of the 14 checks fail, the deploy stops there. No exceptions.",
+  "ts": "1780399140.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "and the canary bakes for 30 minutes minimum now, not 10. we changed that after ACME-201",
+  "ts": "1780399680.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "got it. is the canary automatic or do I have to promote manually?",
+  "ts": "1780400220.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "Automatic promote if metrics stay clean for 30 min. Manual rollback button is in the deploy dashboard, top right. Anyone on the team can hit it, don't wait for permission.",
+  "ts": "1780400580.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "+1 to that. Rolling back is always cheaper than debugging in prod. Nobody has ever been criticized here for rolling back too eagerly.",
+  "ts": "1780402080.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "should we add this to the runbook? the doc drift is getting bad, i almost followed the old flow last week too",
+  "ts": "1780402380.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "yes, it's on my list. tracking in ACME-247 if someone wants to grab it before me",
+  "ts": "1780403760.000000",
+  "thread_ts": "1780396920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "Reminder since it came up twice this week: If the canary shows >2% error rate, rollback immediately. Don't sit there watching it hoping it recovers.",
+  "ts": "1780409100.000000",
+  "thread_ts": "1780409100.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "2% feels tight for services with low traffic tho. checkout-service gets like 50 req/min at night, one flaky request skews the whole number",
+  "ts": "1780410300.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "fair \u2014 the threshold is 2% sustained over 5 minutes, not instantaneous. the deploy bot already computes it that way",
+  "ts": "1780411200.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "ah ok that's more reasonable. is latency part of the auto-rollback too?",
+  "ts": "1780411380.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "p99 > 800ms sustained 5 min also triggers it. error rate and latency are the only two auto signals, everything else is human judgement",
+  "ts": "1780411500.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "worth saying: rollback first, investigate after. we lost 40 min on the June 9th incident because someone was debugging a live canary",
+  "ts": "1780411740.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": ":point_up: this. war room first, blame later. actually no blame at all lol",
+  "ts": "1780412220.000000",
+  "thread_ts": "1780409100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "blameless or nothing :handshake:",
+  "ts": "1780412760.000000",
+  "thread_ts": "1780409100.000000"
+ }
+]

@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "reminder that the deploy dashboard has a big red ROLLBACK button now. it works. i tested it. use it",
+  "ts": "1781169420.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "webhook signature verification is now mandatory on all inbound integrations, migration guide going up on Confluence today",
+  "ts": "1781178840.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "ci was down 20 min this morning (github actions outage, not us), all green again",
+  "ts": "1781191500.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "who owns the cron that prunes old s3 exports? it's been failing silently since june 20th",
+  "ts": "1781195880.000000"
+ }
+]

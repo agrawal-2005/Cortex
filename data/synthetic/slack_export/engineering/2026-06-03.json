@@ -1,0 +1,145 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "Code review refresher because I keep seeing single-approval merges: Don't merge without 2 approvals unless it's a hotfix. Hotfixes need 1 approval + a follow-up review ticket filed within 24h.",
+  "ts": "1780479480.000000",
+  "thread_ts": "1780479480.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "does a rubber-stamp 'lgtm' count as an approval? asking for a friend :eyes:",
+  "ts": "1780479600.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "if the diff is >100 lines and the review took 45 seconds, no. reviewers should at least run the code or trace the logic",
+  "ts": "1780480740.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "what about docs-only changes? feels heavy to need 2 approvals to fix a typo in the README",
+  "ts": "1780481220.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "docs-only and test-only changes: 1 approval is fine. the 2-approval rule is for anything that ships to prod",
+  "ts": "1780482660.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "how do i mark something as a hotfix? just the label?",
+  "ts": "1780483980.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "add the `hotfix` label AND prefix the PR title with [HOTFIX]. the merge bot checks the label, humans read the title",
+  "ts": "1780485420.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "also please stop force-pushing over review comments, it nukes the thread context. append commits, squash at merge",
+  "ts": "1780486560.000000",
+  "thread_ts": "1780479480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "staging is doing the thing again where the auth service returns 503 for ~2 min after every deploy. anyone else?",
+  "ts": "1780502100.000000",
+  "thread_ts": "1780502100.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "known issue, it's the connection pool warming up. see ACME-238. workaround: the smoke tests retry for 3 minutes before failing",
+  "ts": "1780502640.000000",
+  "thread_ts": "1780502100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "ahh ok. it made me think my change broke auth, lost an hour to that :melting_face:",
+  "ts": "1780503600.000000",
+  "thread_ts": "1780502100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "yeah it bites everyone once. real fix is lazy pool init, it's in the backlog",
+  "ts": "1780504800.000000",
+  "thread_ts": "1780502100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "adding this to the onboarding doc so the next new person doesn't get got",
+  "ts": "1780505400.000000",
+  "thread_ts": "1780502100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "good instinct chris :raised_hands:",
+  "ts": "1780505520.000000",
+  "thread_ts": "1780502100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "proposal: run the smoke suite on every PR, not just pre-deploy. it's 90 seconds, would catch integration breaks way earlier",
+  "ts": "1780513080.000000",
+  "thread_ts": "1780513080.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "90s x 40 PRs a day is real CI money but honestly the June 9 incident would've been caught by exactly this",
+  "ts": "1780514520.000000",
+  "thread_ts": "1780513080.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "let's do it on PRs that touch api/ or services/, skip for frontend-only diffs",
+  "ts": "1780515420.000000",
+  "thread_ts": "1780513080.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "frontend can break the contract too... but ok as a start",
+  "ts": "1780516140.000000",
+  "thread_ts": "1780513080.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "done, shipped in ACME-252. path-filtered smoke on PRs is live",
+  "ts": "1780516740.000000",
+  "thread_ts": "1780513080.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "nice turnaround :fire:",
+  "ts": "1780517100.000000",
+  "thread_ts": "1780513080.000000"
+ }
+]

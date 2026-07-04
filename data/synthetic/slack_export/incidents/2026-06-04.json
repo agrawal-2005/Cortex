@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "monitoring gap found during ACME-201 review: we had no alert on db pool saturation. added, fires at 80%",
+  "ts": "1780565100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "postmortem for the june 9 outage (ACME-201) is filed and reviewed. 4 action items, all ticketed. good process everyone",
+  "ts": "1780579260.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "password-reset email delays confirmed as a sendgrid issue on their side, their status page acknowledges. downgrading to P2, monitoring",
+  "ts": "1780595400.000000"
+ }
+]

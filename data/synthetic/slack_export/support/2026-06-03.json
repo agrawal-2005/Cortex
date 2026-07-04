@@ -1,0 +1,95 @@
+[
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "got a $12k refund request from Northwind (enterprise). do i just... process it? that number scares me",
+  "ts": "1780478700.000000",
+  "thread_ts": "1780478700.000000",
+  "reply_count": 6
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "No \u2014 for enterprise clients, loop in the account manager before processing any refund over $5000. That's Emma for Northwind.",
+  "ts": "1780480020.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "yep loop me in. half the time a big refund request is really a renewal negotiation in disguise, we can often fix the underlying issue instead",
+  "ts": "1780480980.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "makes sense. what's the threshold for non-enterprise?",
+  "ts": "1780481340.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "self-serve plans: anything under $1000 you process directly, $1000-5000 needs my sign-off, over $5000 goes to finance",
+  "ts": "1780481940.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "and for Northwind specifically \u2014 talked to their admin, they were double-charged by a billing bug (ACME-266). refund the duplicate, keep the sub",
+  "ts": "1780482300.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "done, refunded the dupe charge and noted it on the account. crisis averted :relieved:",
+  "ts": "1780482840.000000",
+  "thread_ts": "1780478700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "stripe is throwing 'charge_already_refunded' on a refund that definitely didn't reach the customer. ideas?",
+  "ts": "1780502040.000000",
+  "thread_ts": "1780502040.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "classic stripe edge case. If Stripe refund fails, create a manual credit note in billing \u2014 Billing > Credits > New, reference the original charge id in the memo.",
+  "ts": "1780502640.000000",
+  "thread_ts": "1780502040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "found it. does the credit note auto-apply to their next invoice?",
+  "ts": "1780504140.000000",
+  "thread_ts": "1780502040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "yes, oldest credit first. also file a ticket with the charge id so eng can check for the double-refund bug, it's happened before (ACME-266 again lol)",
+  "ts": "1780505340.000000",
+  "thread_ts": "1780502040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "seeing this thread \u2014 yes please keep filing those, we think it's a race in the webhook handler. every data point helps",
+  "ts": "1780506240.000000",
+  "thread_ts": "1780502040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "filed as ACME-271 with both charge ids",
+  "ts": "1780507440.000000",
+  "thread_ts": "1780502040.000000"
+ }
+]

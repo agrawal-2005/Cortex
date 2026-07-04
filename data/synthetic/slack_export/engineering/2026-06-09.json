@@ -1,0 +1,32 @@
+[
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "on-call handoff notes are in the usual doc, quiet week, one paging alert (false positive, tuned it)",
+  "ts": "1780996920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "TIL our bundle is 40% moment.js. removing it, ACME-255",
+  "ts": "1781006040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "if you touch the billing service read the escalation matrix on Confluence first, billing bugs page people at 3am",
+  "ts": "1781016900.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "whats the difference between `make deploy` and `make ship`? asking before i break something",
+  "ts": "1781021760.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "`make ship` = deploy + migrations + cache flush. `make deploy` is code only. 99% of the time you want ship",
+  "ts": "1781029680.000000"
+ }
+]

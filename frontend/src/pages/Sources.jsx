@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, Loader2, Terminal } from 'lucide-react'
 import {
-  getDocuments, uploadSlackExport, uploadFile, ingestGitHub,
+  getDocumentSourceTypes, uploadSlackExport, uploadFile, ingestGitHub,
   uploadDiscordExport, ingestDiscordLive, clusterDocuments, extractAllClusters,
-  getIngestStatus,
+  getIngestStatus, uploadJiraExport, uploadConfluenceExport,
 } from '../api/client'
+import { sourceKeyOf } from '../lib/ui'
 import Modal from '../components/Modal'
 import DropZone from '../components/DropZone'
 import SourceIcon from '../components/SourceIcon'
@@ -18,7 +19,7 @@ const INTEGRATIONS = [
   { key: 'github', name: 'GitHub', description: 'Code & PRs', availability: 'available' },
   { key: 'discord', name: 'Discord', description: 'Community chat', availability: 'available' },
   { key: 'notion', name: 'Notion', description: 'Documentation', availability: 'coming_soon' },
-  { key: 'confluence', name: 'Confluence', description: 'Wiki & docs', availability: 'coming_soon' },
+  { key: 'confluence', name: 'Confluence', description: 'Wiki & docs', availability: 'available' },
   { key: 'gmail', name: 'Gmail', description: 'Email threads', availability: 'coming_soon' },
   { key: 'teams', name: 'MS Teams', description: 'Team chat', availability: 'coming_soon' },
   { key: 'linear', name: 'Linear', description: 'Issue tracking', availability: 'coming_soon' },
@@ -38,16 +39,6 @@ async function pollIngestTask(taskId, onProgress) {
     if (task.status === 'completed' || task.status === 'failed') return task
     onProgress?.(task)
   }
-}
-
-// Map document source_type prefixes to integration keys
-function sourceKeyOf(sourceType) {
-  if (!sourceType) return null
-  if (sourceType.startsWith('github')) return 'github'
-  if (sourceType === 'slack') return 'slack'
-  if (sourceType === 'discord') return 'discord'
-  if (sourceType === 'jira') return 'jira'
-  return 'file'
 }
 
 // ── Integration card ──────────────────────────────────────────────────
@@ -328,22 +319,22 @@ function DiscordModal({ open, onClose, onIngest }) {
   )
 }
 
-function FileModal({ open, onClose, onIngest, sourceType = 'custom', title = 'Upload File' }) {
+function FileModal({
+  open, onClose, onIngest, sourceType = 'custom', title = 'Upload File',
+  subtitle = 'Each record needs a `content` field',
+  accept = '.csv,.json', hint = 'CSV or JSON (PDF coming soon)',
+  upload,
+}) {
   const [file, setFile] = useState(null)
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      subtitle="Each record needs a `content` field"
-    >
+    <Modal open={open} onClose={onClose} title={title} subtitle={subtitle}>
       <div className="space-y-4">
-        <DropZone accept=".csv,.json" hint="CSV or JSON (PDF coming soon)" file={file} onFile={setFile} />
+        <DropZone accept={accept} hint={hint} file={file} onFile={setFile} />
         <Button
           variant="primary"
           className="w-full"
           disabled={!file}
-          onClick={() => onIngest(file.name, () => uploadFile(file, sourceType))}
+          onClick={() => onIngest(file.name, () => (upload ? upload(file) : uploadFile(file, sourceType)))}
         >
           Ingest file
         </Button>
@@ -384,10 +375,10 @@ export default function Sources() {
   const toast = useToast()
 
   const refreshConnected = useCallback(() => {
-    getDocuments({ limit: 100 })
+    getDocumentSourceTypes()
       .then((res) => {
-        const docs = Array.isArray(res.data) ? res.data : res.data.items || []
-        setConnectedKeys(new Set(docs.map((d) => sourceKeyOf(d.source_type)).filter(Boolean)))
+        const types = Array.isArray(res.data) ? res.data : []
+        setConnectedKeys(new Set(types.map(sourceKeyOf).filter(Boolean)))
       })
       .catch(() => {})
   }, [])
@@ -501,8 +492,27 @@ export default function Sources() {
   const sections = useMemo(() => {
     const connected = INTEGRATIONS.filter((i) => connectedKeys.has(i.key))
     const available = INTEGRATIONS.filter((i) => !connectedKeys.has(i.key))
+    // Source types ingested via the API that don't match a catalog entry
+    // still get a card — connected state is driven by the data, not this list.
+    const knownKeys = new Set(INTEGRATIONS.map((i) => i.key))
+    for (const key of [...connectedKeys].sort()) {
+      if (!knownKeys.has(key)) {
+        connected.push({
+          key,
+          name: key.charAt(0).toUpperCase() + key.slice(1),
+          description: 'Ingested via API or file',
+          availability: 'available',
+        })
+      }
+    }
     return { connected, available }
   }, [connectedKeys])
+
+  // Unknown (dynamic) sources have no dedicated modal — offer file upload.
+  const openModal = useCallback((key) => {
+    const hasModal = ['slack', 'github', 'discord', 'jira', 'confluence', 'file', 'api'].includes(key)
+    setActiveModal(hasModal ? key : 'file')
+  }, [])
 
   return (
     <div className="space-y-8">
@@ -526,7 +536,7 @@ export default function Sources() {
                 key={integration.key}
                 integration={integration}
                 connected
-                onConnect={setActiveModal}
+                onConnect={openModal}
               />
             ))}
           </div>
@@ -543,7 +553,7 @@ export default function Sources() {
               key={integration.key}
               integration={integration}
               connected={false}
-              onConnect={setActiveModal}
+              onConnect={openModal}
             />
           ))}
         </div>
@@ -558,8 +568,21 @@ export default function Sources() {
         open={activeModal === 'jira'}
         onClose={() => setActiveModal(null)}
         onIngest={runIngest}
-        sourceType="jira"
         title="Connect Jira — upload export"
+        subtitle="JSON export with an `issues` array"
+        accept=".json"
+        hint="Jira export .json file"
+        upload={uploadJiraExport}
+      />
+      <FileModal
+        open={activeModal === 'confluence'}
+        onClose={() => setActiveModal(null)}
+        onIngest={runIngest}
+        title="Connect Confluence — upload export"
+        subtitle="JSON export with a `pages` array"
+        accept=".json"
+        hint="Confluence export .json file"
+        upload={uploadConfluenceExport}
       />
       <ApiModal open={activeModal === 'api'} onClose={() => setActiveModal(null)} />
     </div>

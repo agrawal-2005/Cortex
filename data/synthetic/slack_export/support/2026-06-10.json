@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "new starter guide for support is updated with the 30-day refund policy and the enterprise thresholds",
+  "ts": "1781084400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "customer on the free plan asking for phone support... politely pointed at the plans page :sweat_smile:",
+  "ts": "1781102640.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "q2 postmortem review with eng is thursday, bring the top 5 recurring ticket themes",
+  "ts": "1781111400.000000"
+ }
+]

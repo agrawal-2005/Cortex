@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "if a customer mentions GDPR or deletion requests, use the privacy macro and cc legal@ \u2014 do not improvise answers on this, ever",
+  "ts": "1780825260.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "how do i see a customer's rate limit usage? they claim they're being throttled at half the documented limit",
+  "ts": "1780838400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "admin panel > account > api usage. also check if they're on the legacy plan, those have the old lower limits (see the rate limiting page on Confluence)",
+  "ts": "1780844520.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "that was it, legacy plan. thanks lucy!",
+  "ts": "1780856220.000000"
+ }
+]

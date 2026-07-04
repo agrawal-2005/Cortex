@@ -1,0 +1,106 @@
+{
+  "space_export": "AcmeTech Confluence",
+  "export_date": "2026-07-01T00:00:00Z",
+  "pages": [
+    {
+      "id": "10001",
+      "title": "Deployment Runbook",
+      "space": "ENG",
+      "body": "How to deploy AcmeTech services to production.\n\nSTEPS:\n1. Merge your PR to main. CI builds the release artifact automatically.\n2. Deploy the artifact to staging with `make deploy ENV=staging`.\n3. Manually verify your change on staging (click through the affected flows).\n4. Deploy straight to production with `make deploy ENV=prod`.\n5. Watch the error dashboard for 10 minutes after the deploy.\n\nROLLBACK:\nIf something looks wrong, redeploy the previous artifact with `make deploy ENV=prod VERSION=<previous>`. Ask Elena or Marcus before rolling back — rollbacks touch shared infrastructure.\n\nNOTES:\n- Deploys are allowed any time before 4pm. No Friday deploys.\n- Database migrations run automatically as part of the deploy.\n- If staging looks broken right after a deploy, wait a couple of minutes and retry.\n\nContact: Elena Petrov (DevOps) for pipeline issues.",
+      "author": "Elena Petrov",
+      "created": "2025-08-14T10:00:00Z",
+      "last_modified": "2025-11-20T15:30:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10001"
+    },
+    {
+      "id": "10002",
+      "title": "Incident Response Playbook",
+      "space": "ENG",
+      "body": "What to do when production breaks.\n\nSEVERITY LEVELS:\n- P0: full outage or data loss. Page the on-call immediately for any P0.\n- P1: major degradation with a workaround available.\n- P2: partial or minor impact.\nWhen in doubt, page anyway — false pages are free.\n\nRESPONSE PROCESS:\n1. Whoever detects the incident declares it in #incidents with severity.\n2. First responder opens the war room in Slack and owns the timeline.\n3. Page the on-call for P0s; P1s go to the service owner first.\n4. Assign someone to customer comms — status page within 15 minutes, enterprise notifications per the SLA process.\n5. Mitigate first, investigate after. Rollback is always an acceptable mitigation.\n6. Declare recovery in the war room with a timestamp.\n\nPOSTMORTEMS:\n- Postmortem must be filed within 48 hours by the first responder.\n- Format: timeline, root cause, customer impact, what went well, action items with owners.\n- Blameless: we postmortem the system, not the person.\n- Action items get the `postmortem` label in Jira and are prioritized above feature work.\n- Thursday standup reviews all open postmortems.\n\nP1s with small blast radius may use the lightweight format: one pager, no meeting.",
+      "author": "Raj Patel",
+      "created": "2025-09-02T11:00:00Z",
+      "last_modified": "2026-01-15T09:45:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10002"
+    },
+    {
+      "id": "10003",
+      "title": "Refund Policy",
+      "space": "SUP",
+      "body": "Official refund policy for AcmeTech subscriptions.\n\nREFUND WINDOW:\nCustomers may request a full refund within 15 days of the charge date. Requests after 15 days are denied — point the customer to the terms of service. The 15-day window applies to monthly plans only; annual plans are non-refundable after activation.\n\nPROCESS:\n1. Verify the charge date in the billing panel.\n2. If within 15 days, process the refund through Stripe directly.\n3. Note the refund on the customer account with the reason.\n\nESCALATION:\nRefunds over $1,000 require support-lead sign-off. For enterprise accounts, contact the account manager.\n\nEXCEPTIONS:\nNo exceptions to the 15-day window without VP approval.",
+      "author": "Tom O'Connell",
+      "created": "2025-07-10T14:00:00Z",
+      "last_modified": "2025-12-05T10:20:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/SUP/pages/10003"
+    },
+    {
+      "id": "10004",
+      "title": "New Hire Onboarding Checklist",
+      "space": "PEOPLE",
+      "body": "Checklist for onboarding new engineers at AcmeTech.\n\nBEFORE DAY 1 (manager):\n- Order laptop and peripherals\n- Create email account\n- Request VPN access via the IT portal: https://vpn.acmetech.internal/request\n- Add to the engineering mailing list\n\nDAY 1:\n- HR paperwork and benefits enrollment\n- Install the VPN client and verify connectivity\n- Clone the main repositories\n- Set up the local development environment (see the Dev Environment page — allow a full day)\n- Intro meetings with the team\n\nWEEK 1:\n- Complete security training\n- First ticket: pick something from the `good-first-issue` label\n- Meet your onboarding buddy\n\nACCESS:\n- Staging access is granted on day 1.\n- Production access requires manager approval and the security training certificate.\n\nQuestions? Ask in #onboarding.",
+      "author": "Marcus Webb",
+      "created": "2025-06-18T09:00:00Z",
+      "last_modified": "2025-11-08T16:00:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/PEOPLE/pages/10004"
+    },
+    {
+      "id": "10005",
+      "title": "Code Review Guidelines",
+      "space": "ENG",
+      "body": "How we review code at AcmeTech.\n\nAPPROVALS:\n- Anything that ships to production requires 2 approvals before merge.\n- Hotfixes may merge with 1 approval, but a follow-up review ticket must be filed within 24 hours. Mark hotfixes with the `hotfix` label AND a [HOTFIX] title prefix.\n- Docs-only and test-only changes need 1 approval.\n\nREVIEWER EXPECTATIONS:\n- Actually read the diff. For changes over 100 lines, run the code or trace the logic — a 45-second LGTM is not a review.\n- First review pass within 24 hours (team SLA).\n- Comment on the approach before nitpicking style; the linter owns style.\n\nAUTHOR EXPECTATIONS:\n- Keep PRs under ~400 lines where possible; split otherwise.\n- Never force-push over review comments — it destroys thread context. Append commits, squash at merge.\n- Respond to every comment, even if just with a resolution emoji.\n\nAPPENDIX — DATABASE MIGRATIONS:\n- Two-release rule: never drop a column in the same release that stops using it. Release N stops reading, release N+1 drops. This preserves rollback safety.\n- Always run migrations against the staging snapshot first: `make migrate-staging`.\n- Migrations that lock large tables need a review from the DB owner.",
+      "author": "Marcus Webb",
+      "created": "2025-10-05T13:00:00Z",
+      "last_modified": "2026-02-10T11:30:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10005"
+    },
+    {
+      "id": "10006",
+      "title": "API Rate Limiting Policy",
+      "space": "ENG",
+      "body": "How rate limiting works on the AcmeTech API.\n\nMODEL:\n- One global token bucket per API key (not per endpoint).\n- Current plans: 600 requests/minute sustained, burst to 1,200.\n- Legacy plans (pre-2025 signups): 300 requests/minute, burst to 600. Legacy accounts are being migrated — check the plan code in the admin panel before debugging a throttling complaint.\n\nBEHAVIOR:\n- Throttled requests receive HTTP 429 with a Retry-After header indicating seconds until the bucket refills. Clients should honor it.\n- Rate limit headers on every response: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.\n\nENTERPRISE:\n- Enterprise plans have custom limits set per contract; the limiter service is the source of truth, not the plan table.\n\nSUPPORT NOTES:\n- 'Throttled at half the documented limit' almost always means a legacy plan.\n- Customers cannot currently see their own usage; a usage dashboard is planned (ACME-254).",
+      "author": "Priya Sharma",
+      "created": "2025-11-12T10:00:00Z",
+      "last_modified": "2026-06-10T14:20:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10006"
+    },
+    {
+      "id": "10007",
+      "title": "On-Call Rotation",
+      "space": "ENG",
+      "body": "How on-call works at AcmeTech.\n\nROTATION:\n- Weekly rotations, Monday 10:00 UTC handoff.\n- Primary + secondary. Secondary is paged if primary doesn't ack within 5 minutes.\n- Rotation includes: Elena, Raj, Priya, Lucy, Marcus. New joiners shadow a full rotation before joining — you page WITH someone before you page alone.\n\nHANDOFF:\n- Outgoing primary posts handoff notes in the on-call doc: open alerts, ongoing weirdness, tuning changes.\n\nPAGING POLICY:\n- P0: page immediately, always.\n- P1: page during business hours; after hours, page if customer-facing.\n- False pages are free — when in doubt, page.\n- Alert fatigue is a bug: if an alert pages twice without action needed, tune or delete it.\n\nCOMPENSATION:\n- On-call week carries a stipend; incident hours after midnight convert to time off in lieu.\n\nESCALATION CHAIN:\nPrimary → Secondary → Engineering Lead (Marcus) → CTO (Sarah).",
+      "author": "Raj Patel",
+      "created": "2025-10-20T12:00:00Z",
+      "last_modified": "2026-05-28T09:00:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10007"
+    },
+    {
+      "id": "10008",
+      "title": "Sprint Planning Process",
+      "space": "PROD",
+      "body": "How AcmeTech plans sprints.\n\nCADENCE:\n- Two-week sprints. Planning Thursday 10:00 for the sprint starting Monday.\n\nPROCESS:\n1. PMs bring ranked candidates with PRDs that have already passed tech review — engineering finding out about a feature at sprint planning is too late.\n2. Engineering brings capacity (adjusted for rotations, on-call, ramping new hires).\n3. The team commits together. Nothing enters the sprint after commit without swapping something of equal size out.\n4. Escalations for mid-sprint additions go through the PM, never directly to engineers.\n\nCARRY-OVERS:\n- Carry-over work keeps its original estimate minus progress — don't re-estimate nearly-done work as fresh.\n\nPRIORITIZATION PRINCIPLES:\n- Postmortem action items outrank feature work, by policy.\n- We are a dev tools company: the API is the product. Dashboard polish never outranks API reliability.\n\nRETRO:\n- Last Friday of the sprint. Velocity, carry-overs, and one process experiment per sprint, max.",
+      "author": "Dan Kim",
+      "created": "2025-09-15T10:00:00Z",
+      "last_modified": "2026-04-22T15:00:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/PROD/pages/10008"
+    },
+    {
+      "id": "10009",
+      "title": "Customer Escalation Matrix",
+      "space": "SUP",
+      "body": "When and how support escalates to engineering and accounts.\n\nIMMEDIATE ESCALATION (page if outside hours):\n- Data loss or suspected data loss\n- Security issues (auth bypass, data exposure, suspicious access)\n- Billing errors (wrong charges, failed refunds, duplicate charges)\nPost in #incidents with: ticket link + customer impact + what you verified. Say what you tested, not just 'X is broken'. Include the request id from the customer's error page if available.\n\nSTANDARD ESCALATION:\n- Everything else: file a Jira bug, engineering triages at next standup.\n\nSLA (ENTERPRISE):\n- P1: 1 hour first response. P2: 4 hours. Clock starts when the ticket lands, does not pause overnight for enterprise.\n- Breach = service credits: 5% of monthly fee per breach, capped at 20% per month.\n- 2 breaches in a quarter triggers an exec review with the account — page the account manager BEFORE a breach, not after.\n- If a P1 is 40 minutes old and untouched, escalate to the support lead and account manager immediately.\n\nREFUND THRESHOLDS:\n- Self-serve: under $1,000 process directly; $1,000–5,000 support-lead sign-off; over $5,000 goes to finance.\n- Enterprise: any refund over $5,000 — loop in the account manager before processing.\n\nCONTACTS:\nSupport lead: Tom O'Connell. Account manager (enterprise): Emma Wright. Engineering escalation: on-call via #incidents.",
+      "author": "Tom O'Connell",
+      "created": "2025-11-25T14:00:00Z",
+      "last_modified": "2026-06-05T11:15:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/SUP/pages/10009"
+    },
+    {
+      "id": "10010",
+      "title": "Architecture Overview",
+      "space": "ENG",
+      "body": "High-level architecture of the AcmeTech platform.\n\nCORE SERVICES:\n- api-gateway: routing, authentication, rate limiting. Config-driven; config changes deploy through the same canary pipeline as code.\n- auth-service: sessions, API keys, SSO (SAML/OIDC). Validates JWTs against the IdP's JWKS.\n- billing-service: subscriptions, invoicing, Stripe integration. All webhook handling must be idempotent — provider retries are routine.\n- webhook-dispatcher: outbound event delivery with exponential backoff (1/4/16/64s, 5 attempts, then parked for manual retry).\n- search-indexer: Kafka consumer maintaining the search index; lag alert at 15 minutes.\n- checkout-service: order flow; hot path is the orders-by-customer lookup, index-dependent.\n\nDATA:\n- Postgres (primary + read replica, failover target 90s), Redis (sessions + caches, all keys require explicit TTL), S3 (uploads and exports, hash-sharded key prefixes), Kafka (event backbone).\n\nDEPLOYMENT:\n- Kubernetes. Deploys go staging → smoke tests → 5% canary → auto-promote on clean metrics.\n- Observability: Grafana dashboards, alerting on error rate, p99 latency, DB pool saturation (80%), Redis memory (80%), search lag.\n\nPRINCIPLES:\n- The API is the product — reliability outranks features.\n- Rollback first, investigate after.\n- Everything that pages a human must have a runbook link in the alert.",
+      "author": "Sarah Chen",
+      "created": "2025-08-01T09:00:00Z",
+      "last_modified": "2026-06-20T10:30:00Z",
+      "url": "https://acmetech.atlassian.net/wiki/spaces/ENG/pages/10010"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+[
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "can we PLEASE agree on one feature flag system, we have env vars, the yaml file, and launchdarkly and nobody knows which wins",
+  "ts": "1780564860.000000",
+  "thread_ts": "1780564860.000000",
+  "reply_count": 4
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "precedence is launchdarkly > yaml > env, documented in... hm, actually i don't think it's documented anywhere except this message now",
+  "ts": "1780565160.000000",
+  "thread_ts": "1780564860.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "cool cool cool so slack is our source of truth :upside_down_face:",
+  "ts": "1780565400.000000",
+  "thread_ts": "1780564860.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "this is exactly the kind of tribal knowledge that keeps biting us. someone write it down please, ACME-260 filed",
+  "ts": "1780566240.000000",
+  "thread_ts": "1780564860.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "took it, will put a page in Confluence under Engineering",
+  "ts": "1780566540.000000",
+  "thread_ts": "1780564860.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "migration rule reminder after friday's near-miss: never drop a column in the same release that stops using it. two-release rule \u2014 release N stops reading, release N+1 drops.",
+  "ts": "1780580220.000000",
+  "thread_ts": "1780580220.000000",
+  "reply_count": 6
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "why two releases? if nothing reads it isn't it safe?",
+  "ts": "1780581000.000000",
+  "thread_ts": "1780580220.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "rollback safety. if release N has a bug and we roll back to N-1, N-1 still reads that column. if you already dropped it, rollback is now impossible",
+  "ts": "1780582260.000000",
+  "thread_ts": "1780580220.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "ohhhh. that's really good to know, this should be in the migration checklist",
+  "ts": "1780582860.000000",
+  "thread_ts": "1780580220.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "it's in the code review guidelines on Confluence but buried in the appendix. i'll bump it to the top",
+  "ts": "1780583040.000000",
+  "thread_ts": "1780580220.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "also always run migrations against the staging snapshot first, `make migrate-staging`. takes 5 min, saves careers :sweat_smile:",
+  "ts": "1780584540.000000",
+  "thread_ts": "1780580220.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "lol accurate. friday's migration locked the users table for 90 seconds on staging \u2014 imagine that on prod",
+  "ts": "1780585500.000000",
+  "thread_ts": "1780580220.000000"
+ }
+]

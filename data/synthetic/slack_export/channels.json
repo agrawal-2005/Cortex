@@ -1,0 +1,194 @@
+[
+ {
+  "id": "C01",
+  "name": "engineering",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": false,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech engineering discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ },
+ {
+  "id": "C02",
+  "name": "support",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": false,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech support discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ },
+ {
+  "id": "C03",
+  "name": "incidents",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": false,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech incidents discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ },
+ {
+  "id": "C04",
+  "name": "onboarding",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": false,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech onboarding discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ },
+ {
+  "id": "C05",
+  "name": "product",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": false,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech product discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ },
+ {
+  "id": "C06",
+  "name": "random",
+  "created": 1735689600,
+  "creator": "U01",
+  "is_archived": false,
+  "is_general": true,
+  "members": [
+   "U01",
+   "U02",
+   "U03",
+   "U04",
+   "U05",
+   "U06",
+   "U07",
+   "U08",
+   "U09",
+   "U10",
+   "U11",
+   "U12"
+  ],
+  "topic": {
+   "value": "",
+   "creator": "",
+   "last_set": 0
+  },
+  "purpose": {
+   "value": "AcmeTech random discussions",
+   "creator": "U01",
+   "last_set": 0
+  }
+ }
+]

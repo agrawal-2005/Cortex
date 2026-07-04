@@ -1,0 +1,32 @@
+[
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "my first PR is up! ACME-263, be gentle :sweat_smile:",
+  "ts": "1780738560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "reviewed, two small comments. solid first PR chris",
+  "ts": "1780747140.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "prod deploy done, canary was clean, 0.3% err rate, promoted at 3:42pm",
+  "ts": "1780751940.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "grafana dashboards for the new checkout service are live, link pinned to this channel",
+  "ts": "1780756020.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "anyone know why the nightly build takes 25 min now? it was 12 last month",
+  "ts": "1780765680.000000"
+ }
+]

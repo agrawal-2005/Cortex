@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "code freeze starts thursday 5pm for the v2.4 release cut",
+  "ts": "1780910940.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "the flaky test in test_billing.py is quarantined, tracked in ACME-249, don't just re-run CI to get past it",
+  "ts": "1780924800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "kubernetes upgrade to 1.31 on staging this weekend, expect ~10 min of api blips saturday morning",
+  "ts": "1780932480.000000"
+ }
+]

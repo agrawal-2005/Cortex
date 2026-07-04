@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "roadmap review with sarah went well \u2014 q3 themes are reliability, api ergonomics, and the enterprise admin console",
+  "ts": "1780477500.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "user interviews this week: 5 customers on the export flow. jake want to sit in on a couple?",
+  "ts": "1780487460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "yes, send me the wednesday ones",
+  "ts": "1780495260.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "interview takeaway: nobody understands that exports email a link. everyone expected a direct download. validates ACME-273",
+  "ts": "1780510440.000000"
+ }
+]

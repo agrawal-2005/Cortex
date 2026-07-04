@@ -1,0 +1,59 @@
+[
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "customer asking for a refund on an annual plan they bought 22 days ago \u2014 the old policy doc says 15 days so i told them no. they escalated. help?",
+  "ts": "1780405800.000000",
+  "thread_ts": "1780405800.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "That doc is stale \u2014 we changed it in May. Refund window is 30 days, no exceptions. The Confluence refund policy page still says 15 days, I keep meaning to fix it.",
+  "ts": "1780406400.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "ooh ok good, so this customer is actually within window. approving the refund now",
+  "ts": "1780406640.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "yep. 30 days from charge date, applies to monthly AND annual plans. the 15-day number is dead, if you see it in any doc flag it to me",
+  "ts": "1780407120.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "confirming from the account side \u2014 legal signed off on 30 days in the May policy review. it's in the updated terms too",
+  "ts": "1780408320.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "should i just edit the Confluence page myself?",
+  "ts": "1780409760.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "yes please, and drop a note in here when it's done so everyone knows",
+  "ts": "1780410480.000000",
+  "thread_ts": "1780405800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "will do :saluting_face:",
+  "ts": "1780410960.000000",
+  "thread_ts": "1780405800.000000"
+ }
+]

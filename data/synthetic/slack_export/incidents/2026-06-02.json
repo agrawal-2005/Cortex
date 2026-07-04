@@ -1,0 +1,87 @@
+[
+ {
+  "type": "message",
+  "user": "U10",
+  "text": ":rotating_light: P0 \u2014 api error rate at 40% and climbing. all endpoints affected. war room is here, i'm first responder",
+  "ts": "1780403400.000000",
+  "thread_ts": "1780403400.000000",
+  "reply_count": 11
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "here. db connections are maxed \u2014 pool shows 100/100 in use, everything else is queueing",
+  "ts": "1780404420.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "Page the on-call immediately for any P0 \u2014 done, priya is paged and joining. sarah FYI",
+  "ts": "1780404540.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "here. checking for a connection leak... the new webhook dispatcher from yesterday's deploy isn't releasing connections on the error path",
+  "ts": "1780404840.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "customer comms: tom, post the status page update. 'degraded performance, investigating' for now",
+  "ts": "1780405620.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "status page updated, enterprise accounts notified per the SLA process",
+  "ts": "1780406280.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "confirmed \u2014 every failed webhook delivery leaks one connection. with the retry storm we exhaust the pool in ~20 min. rolling back yesterday's deploy now",
+  "ts": "1780406820.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "rollback deployed. pool usage dropping... 80... 45... 12. error rate back under 0.5%",
+  "ts": "1780407000.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "declaring recovery at 14:52 UTC. total impact 38 minutes. keeping the war room open another 30 min for stragglers",
+  "ts": "1780407540.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "good response everyone. Postmortem must be filed within 48 hours \u2014 raj you're first responder so you own the doc, ACME-201 is the tracking ticket",
+  "ts": "1780408740.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "on it. draft will be up tomorrow morning, review at thursday standup",
+  "ts": "1780408980.000000",
+  "thread_ts": "1780403400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "the code fix (release connections in the error path + retry backoff) is ACME-235, i'll have it up for review today",
+  "ts": "1780409220.000000",
+  "thread_ts": "1780403400.000000"
+ }
+]

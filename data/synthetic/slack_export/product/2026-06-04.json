@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "feature flag cleanup day is real \u2014 we have 41 flags, 12 are permanently on. eng time approved for pruning next sprint",
+  "ts": "1780565400.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "product principle reminder: we're a dev tools company, the api IS the product. dashboard polish never outranks api reliability in prioritization",
+  "ts": "1780574640.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "v2.4 release notes drafted, review by wednesday if you shipped something in it",
+  "ts": "1780589640.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "competitor launched per-endpoint rate limits today fwiw. our phased plan still holds, visibility first",
+  "ts": "1780594140.000000"
+ }
+]

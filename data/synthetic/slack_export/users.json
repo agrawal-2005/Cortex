@@ -1,0 +1,158 @@
+[
+ {
+  "id": "U01",
+  "team_id": "T0ACME",
+  "name": "sarah.chen",
+  "real_name": "Sarah Chen",
+  "profile": {
+   "title": "CTO",
+   "real_name": "Sarah Chen",
+   "display_name": "sarah.chen"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U02",
+  "team_id": "T0ACME",
+  "name": "marcus.webb",
+  "real_name": "Marcus Webb",
+  "profile": {
+   "title": "Engineering Lead",
+   "real_name": "Marcus Webb",
+   "display_name": "marcus.webb"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U03",
+  "team_id": "T0ACME",
+  "name": "priya.sharma",
+  "real_name": "Priya Sharma",
+  "profile": {
+   "title": "Senior Backend Engineer",
+   "real_name": "Priya Sharma",
+   "display_name": "priya.sharma"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U04",
+  "team_id": "T0ACME",
+  "name": "jake.morrison",
+  "real_name": "Jake Morrison",
+  "profile": {
+   "title": "Senior Frontend Engineer",
+   "real_name": "Jake Morrison",
+   "display_name": "jake.morrison"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U05",
+  "team_id": "T0ACME",
+  "name": "elena.petrov",
+  "real_name": "Elena Petrov",
+  "profile": {
+   "title": "DevOps Engineer",
+   "real_name": "Elena Petrov",
+   "display_name": "elena.petrov"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U06",
+  "team_id": "T0ACME",
+  "name": "tom.oconnell",
+  "real_name": "Tom O'Connell",
+  "profile": {
+   "title": "Support Lead",
+   "real_name": "Tom O'Connell",
+   "display_name": "tom.oconnell"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U07",
+  "team_id": "T0ACME",
+  "name": "aisha.diallo",
+  "real_name": "Aisha Diallo",
+  "profile": {
+   "title": "Support Engineer",
+   "real_name": "Aisha Diallo",
+   "display_name": "aisha.diallo"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U08",
+  "team_id": "T0ACME",
+  "name": "dan.kim",
+  "real_name": "Dan Kim",
+  "profile": {
+   "title": "Product Manager",
+   "real_name": "Dan Kim",
+   "display_name": "dan.kim"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U09",
+  "team_id": "T0ACME",
+  "name": "lucy.tran",
+  "real_name": "Lucy Tran",
+  "profile": {
+   "title": "Backend Engineer",
+   "real_name": "Lucy Tran",
+   "display_name": "lucy.tran"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U10",
+  "team_id": "T0ACME",
+  "name": "raj.patel",
+  "real_name": "Raj Patel",
+  "profile": {
+   "title": "Site Reliability Engineer",
+   "real_name": "Raj Patel",
+   "display_name": "raj.patel"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U11",
+  "team_id": "T0ACME",
+  "name": "emma.wright",
+  "real_name": "Emma Wright",
+  "profile": {
+   "title": "Account Manager",
+   "real_name": "Emma Wright",
+   "display_name": "emma.wright"
+  },
+  "is_bot": false,
+  "deleted": false
+ },
+ {
+  "id": "U12",
+  "team_id": "T0ACME",
+  "name": "chris.novak",
+  "real_name": "Chris Novak",
+  "profile": {
+   "title": "Junior Engineer",
+   "real_name": "Chris Novak",
+   "display_name": "chris.novak"
+  },
+  "is_bot": false,
+  "deleted": false
+ }
+]

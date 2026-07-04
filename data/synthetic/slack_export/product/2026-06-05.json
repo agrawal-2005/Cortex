@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "the admin console mockups are in figma, comments welcome until friday",
+  "ts": "1780651440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "sprint 46 retro: velocity 34 pts, 2 carry-overs, main drag was review latency on big PRs. marcus taking that to eng",
+  "ts": "1780654200.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "review latency point taken \u2014 proposing a 24h SLA on first review pass, discussing at eng weekly",
+  "ts": "1780668840.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "customer advisory board is confirmed for july 22, agenda draft in the product space",
+  "ts": "1780679640.000000"
+ }
+]

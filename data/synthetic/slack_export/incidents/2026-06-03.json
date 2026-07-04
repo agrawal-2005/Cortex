@@ -1,0 +1,108 @@
+[
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "P1 \u2014 checkout p99 latency jumped from 300ms to 2.1s in the last 20 min. not a full outage, page went to me only",
+  "ts": "1780477440.000000",
+  "thread_ts": "1780477440.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "looking. the slow query log is full of the orders-by-customer lookup... did an index get dropped?",
+  "ts": "1780478580.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "last night's migration rebuilt that table. index recreation might still be running... yep, `CREATE INDEX CONCURRENTLY` is at 60%",
+  "ts": "1780478940.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "so it self-heals when the index finishes? eta?",
+  "ts": "1780479300.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "~25 min at current rate. mitigation option: pin the query to the read replica which still has the old index",
+  "ts": "1780480680.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "do the replica pin, 25 min of 2s checkouts costs real money",
+  "ts": "1780481700.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "pinned. p99 back to 340ms. unpinning after the index completes",
+  "ts": "1780482840.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "recovered 16:44 UTC. this one gets a lightweight postmortem \u2014 one pager, no meeting. filing as ACME-241",
+  "ts": "1780483260.000000",
+  "thread_ts": "1780477440.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "noob question: what actually goes in a postmortem here? my last company just yelled at people in a meeting",
+  "ts": "1780494060.000000",
+  "thread_ts": "1780494060.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "lol. blameless here. First responder opens the war room in Slack, owns the timeline, and writes the doc. format: timeline, root cause, customer impact, what went well, action items with owners",
+  "ts": "1780495140.000000",
+  "thread_ts": "1780494060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "who reviews it?",
+  "ts": "1780496400.000000",
+  "thread_ts": "1780494060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "thursday standup reviews all open postmortems. action items become jira tickets with the `postmortem` label \u2014 those are prioritized above feature work by policy",
+  "ts": "1780497300.000000",
+  "thread_ts": "1780494060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "the important cultural bit: we postmortem the SYSTEM not the person. the june 9 outage was a missing code path, not priya's fault, and the doc reflects that",
+  "ts": "1780497780.000000",
+  "thread_ts": "1780494060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "honestly refreshing. ok filing this thread under 'reasons i joined' :smile:",
+  "ts": "1780498920.000000",
+  "thread_ts": "1780494060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "reminder: P0 = full outage or data loss, P1 = major degradation with workaround, P2 = partial/minor. when in doubt page anyway, false pages are free",
+  "ts": "1780507740.000000"
+ }
+]

@@ -1,0 +1,1255 @@
+{
+  "project": "ACME",
+  "export_date": "2026-07-01T00:00:00Z",
+  "issues": [
+    {
+      "key": "ACME-201",
+      "summary": "P0: Database connection pool exhausted — full API outage",
+      "description": "On 2026-06-09 the API error rate climbed to 40% across all endpoints. The Postgres connection pool was saturated (100/100 connections in use) and all requests queued behind it.\n\nTIMELINE (UTC):\n- 14:14 — alert fires, Raj Patel declares P0 and opens the war room in #incidents\n- 14:16 — on-call (Priya Sharma) paged per P0 policy\n- 14:21 — Elena confirms pool at 100/100, everything queueing\n- 14:28 — Priya identifies the new webhook dispatcher (shipped in the previous day's deploy) as not releasing DB connections on its error path\n- 14:35 — combined with the retry storm from failing webhook endpoints, the pool exhausts in ~20 min; rollback of the previous deploy initiated\n- 14:47 — rollback complete, pool usage drops 80 → 45 → 12, error rate back under 0.5%\n- 14:52 — recovery declared. Total customer impact: 38 minutes\n\nROOT CAUSE: The webhook dispatcher acquired a DB connection per delivery but only released it on the success path. Every failed delivery leaked one connection; automatic retries turned endpoint failures into a retry storm that exhausted the pool.\n\nCUSTOMER IMPACT: All API endpoints degraded or failing for 38 minutes. Enterprise accounts notified per SLA process; status page updated at 14:22.\n\nACTION ITEMS:\n1. Release connections on the error path + add retry backoff — ACME-235 (done)\n2. Alert on DB pool saturation at 80% — ACME-236 (done)\n3. Run smoke suite on PRs touching api/ or services/ — ACME-252 (done)\n4. Increase canary bake time from 10 to 30 minutes — deploy pipeline config (done)",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P0",
+      "assignee": "Raj Patel",
+      "reporter": "Raj Patel",
+      "created": "2026-06-09T14:20:00Z",
+      "updated": "2026-06-12T16:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "Root cause confirmed: every failed webhook delivery leaks one connection. The dispatcher's error path returns early before conn.release(). Code fix tracked in ACME-235.",
+          "created": "2026-06-09T15:10:00Z"
+        },
+        {
+          "author": "Raj Patel",
+          "body": "Postmortem draft is up, review at Thursday standup. Blameless format: timeline, root cause, customer impact, what went well, action items with owners. Filed within the 48h window.",
+          "created": "2026-06-10T09:30:00Z"
+        },
+        {
+          "author": "Sarah Chen",
+          "body": "Reviewed. Good response overall — 38 min impact, clean rollback. The gap was detection: no alert on pool saturation. That's action item 2. Also note we lost time early because someone was debugging the live canary — rollback first, investigate after.",
+          "created": "2026-06-11T14:05:00Z"
+        },
+        {
+          "author": "Raj Patel",
+          "body": "All 4 action items ticketed and closed. ACME-235 merged and deployed with a clean canary. Closing.",
+          "created": "2026-06-12T15:55:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p0",
+        "database",
+        "webhooks"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-205",
+      "summary": "P1: Redis eviction storm degrades session lookups",
+      "description": "2026-06-03, 10:40–11:35 UTC. Session lookup latency spiked from 3ms to 400ms; ~8% of logged-in requests fell back to the DB.\n\nTIMELINE (UTC):\n- 10:40 — cache hit rate alert fires (dropped below 70%)\n- 10:52 — Elena finds Redis at maxmemory, evicting under allkeys-lru\n- 11:10 — cause identified: the feature-flag cache writes one key per user per flag with no TTL; key count grew unbounded after the flag audit added 9 new flags\n- 11:25 — TTL of 1h applied to flag keys, memory reclaimed\n- 11:35 — hit rate recovered, latency normal\n\nROOT CAUSE: Unbounded feature-flag cache keys (no TTL) filled Redis; LRU eviction then evicted hot session keys.\n\nACTION ITEMS: TTL policy for all cache namespaces; memory usage alert at 80%.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Elena Petrov",
+      "reporter": "Raj Patel",
+      "created": "2026-06-03T11:00:00Z",
+      "updated": "2026-06-05T10:00:00Z",
+      "comments": [
+        {
+          "author": "Elena Petrov",
+          "body": "TTL policy now enforced by a lint rule in the cache client — you cannot set a key without an explicit TTL. Memory alert at 80% added to the same dashboard as the DB pool alert.",
+          "created": "2026-06-05T09:45:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "redis",
+        "cache"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-212",
+      "summary": "P0: API gateway rejects all requests after malformed config push",
+      "description": "2026-06-05, 08:12–08:23 UTC. A gateway config push with a malformed route regex caused the gateway to reject 100% of requests with 500s.\n\nTIMELINE (UTC):\n- 08:12 — config applied, error rate goes vertical\n- 08:14 — Raj declares P0, war room opened, on-call paged immediately\n- 08:18 — bad config identified (unescaped regex in the new /v2/exports route)\n- 08:21 — previous config version re-applied via rollback button\n- 08:23 — recovery declared. Total impact: 11 minutes\n\nROOT CAUSE: Gateway config had no validation step — a syntactically invalid regex was accepted at push time and only failed at request-routing time.\n\nACTION ITEMS: config validation in CI (dry-run against gateway binary); config changes go through canary like code deploys.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P0",
+      "assignee": "Elena Petrov",
+      "reporter": "Raj Patel",
+      "created": "2026-06-05T08:30:00Z",
+      "updated": "2026-06-08T12:00:00Z",
+      "comments": [
+        {
+          "author": "Elena Petrov",
+          "body": "Gateway config is now dry-run validated in CI and rolled out through the same 5% canary as code. 11 minutes is a good MTTR but it should have been zero — this was 100% preventable at CI time.",
+          "created": "2026-06-08T11:50:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p0",
+        "gateway",
+        "config"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-219",
+      "summary": "P1: Search indexing lag reaches 4 hours",
+      "description": "2026-06-08. New and updated documents were not searchable for up to 4 hours. The Kafka consumer group for the search indexer was stuck in a rebalance loop after a broker restart; consumers repeatedly joined and left without committing offsets.\n\nROOT CAUSE: session.timeout.ms too low for the indexer's batch size — long batches caused heartbeat misses, which triggered rebalances, which caused longer batches.\n\nRESOLUTION: session timeout raised, batch size capped, lag alert added at 15 minutes.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Lucy Tran",
+      "reporter": "Raj Patel",
+      "created": "2026-06-08T13:10:00Z",
+      "updated": "2026-06-10T09:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Lightweight postmortem (one pager, no meeting) attached. Lag alert at 15 min would have caught this 3.5 hours earlier.",
+          "created": "2026-06-10T08:50:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "search",
+        "kafka"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-226",
+      "summary": "P1: Canary auto-rollback triggered — 3.4% error rate on payments-service deploy",
+      "description": "2026-06-12. The payments-service deploy hit 3.4% error rate at 5% canary traffic, sustained over 5 minutes. The deploy bot auto-rolled back per the >2% threshold. No customer-visible impact beyond the canary slice (~9 minutes of elevated errors for ~5% of payment requests).\n\nROOT CAUSE: A renamed env var (PAYMENT_PROVIDER_KEY → PAYMENTS_API_KEY) was updated in staging config but not prod config; the canary pods started without credentials for the payment provider.\n\nThis is the canary process working as designed — filing as an incident for the tracking stats, but the blast radius was contained automatically.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Priya Sharma",
+      "reporter": "Elena Petrov",
+      "created": "2026-06-12T10:20:00Z",
+      "updated": "2026-06-13T15:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "Config parity check between staging and prod added to the deploy pipeline — deploy now fails fast if a referenced env var is missing in the target environment.",
+          "created": "2026-06-13T14:40:00Z"
+        },
+        {
+          "author": "Sarah Chen",
+          "body": "Worth celebrating: auto-rollback fired exactly as designed. The 2% sustained-over-5-min threshold caught this with zero human intervention.",
+          "created": "2026-06-13T14:55:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "canary",
+        "payments"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-233",
+      "summary": "P0: Auth service rejects valid tokens after JWKS rotation",
+      "description": "2026-06-15, 06:02–06:24 UTC. All authenticated API requests failed with 401 after the identity provider rotated its signing keys. The auth service cached the JWKS for 24h with no refresh-on-miss, so tokens signed with the new key were rejected as invalid.\n\nTIMELINE (UTC):\n- 06:02 — 401 rate spikes to 95% of authenticated traffic\n- 06:04 — P0 declared, on-call paged, war room opened\n- 06:12 — JWKS cache staleness identified (kid in tokens not present in cached key set)\n- 06:19 — auth service restarted to force JWKS refetch; mitigation effective\n- 06:24 — recovery declared. Total impact: 22 minutes\n\nROOT CAUSE: JWKS cache had a fixed 24h TTL and no refresh-on-unknown-kid logic. Key rotation is routine at the IdP; our cache policy made it an outage.\n\nACTION ITEMS: refresh JWKS on unknown kid (with rate limit); alert on auth 401 rate.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P0",
+      "assignee": "Priya Sharma",
+      "reporter": "Raj Patel",
+      "created": "2026-06-15T06:30:00Z",
+      "updated": "2026-06-17T11:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "Refresh-on-unknown-kid shipped, rate-limited to once per 30s to avoid thundering-herd against the IdP. Postmortem filed within 48h, reviewed at Thursday standup.",
+          "created": "2026-06-17T10:45:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p0",
+        "auth",
+        "jwks"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-245",
+      "summary": "P1: File uploads failing with S3 503 SlowDown responses",
+      "description": "2026-06-18. ~12% of file uploads failed for 50 minutes with S3 503 SlowDown. Upload keys were generated as sequential timestamps under a single prefix, concentrating writes on one S3 partition; a customer bulk-import pushed request rate past the per-prefix limit.\n\nROOT CAUSE: Sequential key naming under one prefix (uploads/2026-06-18-000001...) created a hot partition.\n\nRESOLUTION: Key prefix now includes a 4-char hash shard (uploads/a3f9/...). Retries with jitter added to the upload client.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Raj Patel",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-18T09:40:00Z",
+      "updated": "2026-06-20T10:00:00Z",
+      "comments": [
+        {
+          "author": "Aisha Diallo",
+          "body": "Reported from support side — 6 tickets in an hour, all uploads, all the same error. Escalated in #incidents with a request id per the process.",
+          "created": "2026-06-18T09:38:00Z"
+        },
+        {
+          "author": "Raj Patel",
+          "body": "Hash-sharded prefixes deployed. Re-ran the customer's bulk import at 3x the original rate with zero 503s.",
+          "created": "2026-06-20T09:50:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "s3",
+        "uploads"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-256",
+      "summary": "P1: Duplicate billing reminder emails sent to ~800 customers",
+      "description": "2026-06-22. The nightly billing-reminder cron ran twice — the k8s node hosting the job was recycled mid-run and the job was rescheduled without an idempotency guard. ~800 customers received two identical payment-reminder emails.\n\nROOT CAUSE: Cron job had no distributed lock or idempotency key; k8s restart semantics ran it twice.\n\nCUSTOMER IMPACT: No financial impact (emails only), but 23 confused support tickets and one angry enterprise admin.\n\nRESOLUTION: Redis-based run lock keyed on job+date; email sends now carry an idempotency key checked at the provider.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Lucy Tran",
+      "reporter": "Tom O'Connell",
+      "created": "2026-06-22T08:15:00Z",
+      "updated": "2026-06-24T13:00:00Z",
+      "comments": [
+        {
+          "author": "Tom O'Connell",
+          "body": "Support got 23 tickets on this. Used a shared macro so responses were consistent. Please keep billing-touching jobs behind idempotency going forward — billing bugs page people at 3am.",
+          "created": "2026-06-22T10:05:00Z"
+        },
+        {
+          "author": "Lucy Tran",
+          "body": "Run lock + provider-side idempotency keys deployed. Audited the other 11 cron jobs; 3 more had the same gap, fixed in the same PR.",
+          "created": "2026-06-24T12:45:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "billing",
+        "cron"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-270",
+      "summary": "P1: Globex (enterprise) hard-blocked by rate limiter after plan migration",
+      "description": "2026-06-26. Globex's integration was fully blocked (429 on every request) for ~2 hours after their account was migrated from a legacy plan to the current enterprise plan. The migration script reset their rate-limit bucket to the default tier instead of enterprise.\n\nROOT CAUSE: Plan-migration script mapped unknown legacy plan codes to the default tier rather than failing loudly.\n\nCUSTOMER IMPACT: Enterprise customer (currently evaluating us against a competitor) fully blocked for ~2 hours. Account manager engaged; SLA credit discussion in ACME-265's thread pattern applies.\n\nRESOLUTION: Correct tier applied immediately; migration script now fails on unknown plan codes and requires an explicit mapping.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Priya Sharma",
+      "reporter": "Emma Wright",
+      "created": "2026-06-26T14:05:00Z",
+      "updated": "2026-06-27T16:30:00Z",
+      "comments": [
+        {
+          "author": "Emma Wright",
+          "body": "Flagging hard: Globex is evaluating us against a competitor this month. I've called their admin personally. We need the fix plus a written explanation I can forward.",
+          "created": "2026-06-26T14:20:00Z"
+        },
+        {
+          "author": "Priya Sharma",
+          "body": "Tier corrected within 20 min of the report. Customer-safe writeup sent to Emma. The rate-limit usage dashboard (ACME-254) would have let them self-diagnose this — bumping its priority.",
+          "created": "2026-06-27T16:20:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "rate-limiting",
+        "enterprise"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-241",
+      "summary": "P1: Checkout p99 latency 300ms → 2.1s after orders table index rebuild",
+      "description": "2026-06-16, ~16:10–16:44 UTC. Checkout p99 latency jumped from 300ms to 2.1s. The overnight migration rebuilt the orders table and the CREATE INDEX CONCURRENTLY for the orders-by-customer lookup was still running (~60% complete) during business hours, so the hot query fell back to a sequential scan.\n\nMITIGATION: Pinned the orders-by-customer query to the read replica, which still had the old index. p99 recovered to 340ms immediately. Unpinned after index completion.\n\nRecovered 16:44 UTC. Lightweight postmortem: one pager, no meeting.\n\nROOT CAUSE: Migration plan did not account for index rebuild time on the largest table; no check that dependent indexes were ready before traffic hours.\n\nACTION ITEM: migration checklist now requires index-readiness verification for tables over 10M rows.",
+      "status": "Done",
+      "issue_type": "Incident",
+      "priority": "P1",
+      "assignee": "Raj Patel",
+      "reporter": "Raj Patel",
+      "created": "2026-06-16T17:00:00Z",
+      "updated": "2026-06-18T09:30:00Z",
+      "comments": [
+        {
+          "author": "Elena Petrov",
+          "body": "Replica pin was the right call — 25 min of 2s checkouts costs real money. Added 'verify dependent indexes ready' to the migration checklist.",
+          "created": "2026-06-17T09:15:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "p1",
+        "database",
+        "checkout"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-203",
+      "summary": "Invoice totals rounded incorrectly for annual plans with mid-cycle proration",
+      "description": "When an annual plan is upgraded mid-cycle, the prorated credit is rounded per line item instead of on the total, producing invoices off by $0.01–$0.04. Three customer reports. Root cause: float arithmetic in the proration helper instead of integer cents.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "High",
+      "assignee": "Lucy Tran",
+      "reporter": "Tom O'Connell",
+      "created": "2026-06-02T11:20:00Z",
+      "updated": "2026-06-06T15:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Rewrote proration in integer cents, rounding once at the total. Backfilled a regression test with the three reported invoices as fixtures.",
+          "created": "2026-06-06T14:50:00Z"
+        }
+      ],
+      "labels": [
+        "billing",
+        "money"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-210",
+      "summary": "Password reset emails delayed or not arriving",
+      "description": "Spike of ~15 tickets/day reporting password reset emails not arriving. Investigation showed SendGrid delivery delays on their side (acknowledged on their status page) compounded by our webhook processor not consuming delivery-failure events, so we never retried via the fallback provider.\n\nFix: consume SendGrid delivery events; failover to backup provider after 5 min without a delivered event.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "High",
+      "assignee": "Lucy Tran",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-10T13:45:00Z",
+      "updated": "2026-06-14T10:00:00Z",
+      "comments": [
+        {
+          "author": "Aisha Diallo",
+          "body": "Escalated from support — this was the biggest ticket driver two days running. Downgraded to P2 once SendGrid acknowledged, but the missing failover is ours to fix.",
+          "created": "2026-06-10T13:50:00Z"
+        },
+        {
+          "author": "Lucy Tran",
+          "body": "Failover shipped. During SendGrid's next blip the backup provider picked up automatically — zero tickets.",
+          "created": "2026-06-14T09:45:00Z"
+        }
+      ],
+      "labels": [
+        "email",
+        "support-driven"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-215",
+      "summary": "Dashboard charts render blank on Safari 18",
+      "description": "Usage charts render as empty containers on Safari 18. The charting lib uses OffscreenCanvas which Safari 18 ships behind a flag. Fallback to standard canvas when OffscreenCanvas is unavailable.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Jake Morrison",
+      "reporter": "Dan Kim",
+      "created": "2026-06-04T09:30:00Z",
+      "updated": "2026-06-05T17:00:00Z",
+      "comments": [],
+      "labels": [
+        "frontend",
+        "safari"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-221",
+      "summary": "Race condition in payment webhook handler can trigger double refunds",
+      "description": "When Stripe delivers the same refund webhook twice within ~200ms (which it does under retry), both handler invocations pass the 'already refunded?' check before either writes, and a second refund is issued. Support has seen the resulting 'charge_already_refunded' errors when manually refunding (see ACME-271 for a customer-facing instance and ACME-266 for the duplicate-charge sibling bug).\n\nFix approach: take a row-level lock on the charge record, or use the event id as an idempotency key. Going with the idempotency key — consistent with the ACME-256 remediation.",
+      "status": "In Progress",
+      "issue_type": "Bug",
+      "priority": "Highest",
+      "assignee": "Lucy Tran",
+      "reporter": "Lucy Tran",
+      "created": "2026-06-19T15:30:00Z",
+      "updated": "2026-06-29T11:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Support keeps filing charge-id data points (thank you Aisha) — pattern is consistent with the webhook race. Idempotency-key fix is in review.",
+          "created": "2026-06-29T10:50:00Z"
+        }
+      ],
+      "labels": [
+        "billing",
+        "webhooks",
+        "race-condition",
+        "money"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-228",
+      "summary": "Admin panel shows wrong rate limit for legacy plan accounts",
+      "description": "The admin panel's account > api usage page displays the current-plan limits for accounts still on legacy plans, whose actual enforced limits are half that. This misleads support during rate-limit investigations. Display the enforced limit from the limiter service, not the plan table.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Jake Morrison",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-11T10:15:00Z",
+      "updated": "2026-06-13T12:00:00Z",
+      "comments": [
+        {
+          "author": "Aisha Diallo",
+          "body": "This one cost us a full support cycle — customer claimed throttling at half the documented limit and they were right, they were on a legacy plan. Panel now needs to show the truth.",
+          "created": "2026-06-11T10:18:00Z"
+        }
+      ],
+      "labels": [
+        "rate-limiting",
+        "admin-panel",
+        "support-driven"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-231",
+      "summary": "Webhook dispatcher retries failing endpoints without backoff",
+      "description": "The webhook dispatcher retries failed deliveries immediately and indefinitely, hammering endpoints that are down and amplifying our own load (this retry storm was a contributing factor in the June 9 outage, ACME-201). Implement exponential backoff with jitter: 1s, 4s, 16s, 64s, then park for manual retry. Cap at 5 attempts per delivery.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "High",
+      "assignee": "Lucy Tran",
+      "reporter": "Priya Sharma",
+      "created": "2026-06-10T10:00:00Z",
+      "updated": "2026-06-16T14:30:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Merged. Backoff schedule 1/4/16/64s with ±20% jitter, 5-attempt cap, parked deliveries visible in the admin panel with a manual retry button.",
+          "created": "2026-06-16T14:20:00Z"
+        }
+      ],
+      "labels": [
+        "webhooks",
+        "postmortem"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-234",
+      "summary": "Data export emails flagged as spam for Outlook recipients",
+      "description": "Export-ready notification emails land in junk for Microsoft-hosted mailboxes (~30% of enterprise seats). The export email template embeds the download link with a raw IP-based tracking redirect that trips Outlook's filters. Use the branded domain for all links and drop the redirect.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Jake Morrison",
+      "reporter": "Tom O'Connell",
+      "created": "2026-06-06T14:00:00Z",
+      "updated": "2026-06-09T10:00:00Z",
+      "comments": [
+        {
+          "author": "Tom O'Connell",
+          "body": "This makes the export-UX confusion (ACME-273) worse — customers wait for an email that's sitting in junk. Related but separate fixes.",
+          "created": "2026-06-06T14:05:00Z"
+        }
+      ],
+      "labels": [
+        "email",
+        "exports"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-235",
+      "summary": "Webhook dispatcher leaks DB connections on delivery failure path",
+      "description": "Code fix for the June 9 P0 (ACME-201). The dispatcher's error path returns before releasing its DB connection; every failed delivery leaks one connection from the pool. Under a retry storm the pool (100 connections) exhausts in ~20 minutes.\n\nFIX: wrap connection acquisition in a context manager so release happens on all paths; add retry backoff (full backoff redesign is ACME-231). Regression test simulates 200 consecutive delivery failures and asserts pool usage stays flat.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Highest",
+      "assignee": "Priya Sharma",
+      "reporter": "Priya Sharma",
+      "created": "2026-06-09T16:00:00Z",
+      "updated": "2026-06-11T17:45:00Z",
+      "comments": [
+        {
+          "author": "Marcus Webb",
+          "body": "Reviewed and approved along with one more reviewer — 2 approvals per the review policy, this ships to prod. Context manager approach is right; please audit the other three services that hand-manage connections.",
+          "created": "2026-06-10T11:30:00Z"
+        },
+        {
+          "author": "Priya Sharma",
+          "body": "Merged and deployed. Canary was clean over the full 30-minute bake. This closes the last June 9 action item.",
+          "created": "2026-06-11T17:40:00Z"
+        }
+      ],
+      "labels": [
+        "postmortem",
+        "database",
+        "webhooks"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-238",
+      "summary": "Auth service returns 503 for ~2 minutes after every staging deploy",
+      "description": "After each staging deploy the auth service returns 503 for roughly two minutes while its DB connection pool warms up eagerly at boot. This routinely convinces engineers their change broke auth. Workaround: smoke tests retry for 3 minutes before failing. Real fix: lazy pool initialization so the service accepts traffic immediately and grows the pool on demand.",
+      "status": "Backlog",
+      "issue_type": "Bug",
+      "priority": "Low",
+      "assignee": "Elena Petrov",
+      "reporter": "Lucy Tran",
+      "created": "2026-06-05T15:20:00Z",
+      "updated": "2026-06-05T15:20:00Z",
+      "comments": [
+        {
+          "author": "Elena Petrov",
+          "body": "Documented the workaround in the smoke test output message so people stop losing an hour to this. Lazy init stays in the backlog until the pool work settles.",
+          "created": "2026-06-05T16:00:00Z"
+        }
+      ],
+      "labels": [
+        "staging",
+        "auth",
+        "developer-experience"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-240",
+      "summary": "Storybook broken on main after theme tokens PR",
+      "description": "Storybook fails to build on main since the theme tokens PR — the new CSS custom property plugin isn't registered in the storybook webpack config. Theme PR reverted as immediate mitigation; re-land with the storybook config fix.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Jake Morrison",
+      "reporter": "Jake Morrison",
+      "created": "2026-06-13T11:00:00Z",
+      "updated": "2026-06-15T16:00:00Z",
+      "comments": [],
+      "labels": [
+        "frontend",
+        "tooling"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-244",
+      "summary": "Nightly build time regression: 12 min → 25 min after runner image bump",
+      "description": "Test parallelism silently regressed when the CI runner image was bumped — the new image reports 2 CPUs to the test splitter instead of 8 because cgroup v2 changed how CPU quota is exposed. Fix the CPU detection in the splitter and pin an explicit worker count as a guard.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Elena Petrov",
+      "reporter": "Lucy Tran",
+      "created": "2026-06-17T09:20:00Z",
+      "updated": "2026-06-19T11:30:00Z",
+      "comments": [
+        {
+          "author": "Elena Petrov",
+          "body": "Nightly back to 13 min. Added build-duration alerting at +50% over 7-day median so the next regression doesn't hide for a month.",
+          "created": "2026-06-19T11:25:00Z"
+        }
+      ],
+      "labels": [
+        "ci",
+        "developer-experience"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-249",
+      "summary": "Flaky test: test_billing.py::test_partial_refund_rounding fails intermittently",
+      "description": "Fails ~1 in 30 runs. The test seeds a random invoice amount and the proration rounding differs at exactly $x.xx5 boundaries. Quarantined from the blocking suite — do NOT just re-run CI to get past it. Fix by pinning the seed and adding explicit boundary-value cases.",
+      "status": "In Progress",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Lucy Tran",
+      "reporter": "Lucy Tran",
+      "created": "2026-06-18T14:10:00Z",
+      "updated": "2026-06-28T10:00:00Z",
+      "comments": [
+        {
+          "author": "Marcus Webb",
+          "body": "Related to the ACME-203 rounding rewrite — suspect the test predates integer-cents and is asserting the old float behavior at boundaries.",
+          "created": "2026-06-20T09:00:00Z"
+        }
+      ],
+      "labels": [
+        "testing",
+        "flaky",
+        "billing"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-250",
+      "summary": "S3 export-pruning cron failing silently since June 20 (rotated IAM role)",
+      "description": "The nightly cron that prunes exports older than 90 days has been failing silently since June 20 — the IAM role it assumed was rotated and the job swallowed the AccessDenied. Fixed the role reference and added an alert so a cron can never fail silently again (any nonzero exit or zero-objects-processed pages the owner).",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Medium",
+      "assignee": "Elena Petrov",
+      "reporter": "Lucy Tran",
+      "created": "2026-06-25T10:30:00Z",
+      "updated": "2026-06-25T16:00:00Z",
+      "comments": [],
+      "labels": [
+        "cron",
+        "s3",
+        "iam"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-266",
+      "summary": "Duplicate charge created when checkout webhook retries during provider timeout",
+      "description": "When the payment provider times out and retries the checkout confirmation webhook, we create a second charge record and bill the customer twice. Northwind (enterprise) was double-charged $12,000 by this — surfaced via a refund escalation (ACME-253). Sibling of the double-refund race in ACME-221; both stem from non-idempotent webhook handling.\n\nFIX: idempotency key from the provider event id, checked before charge creation. Reconciliation script found 4 other affected accounts (all under $200, all refunded proactively).",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Highest",
+      "assignee": "Lucy Tran",
+      "reporter": "Emma Wright",
+      "created": "2026-06-14T11:00:00Z",
+      "updated": "2026-06-24T15:00:00Z",
+      "comments": [
+        {
+          "author": "Emma Wright",
+          "body": "Northwind's admin flagged the duplicate charge during the refund conversation. Refunded the dupe, kept the subscription — and they signed a 2-year renewal after we handled it well. Handle billing bugs like this and customers stay.",
+          "created": "2026-06-14T11:10:00Z"
+        },
+        {
+          "author": "Lucy Tran",
+          "body": "Idempotency fix deployed. Reconciliation script now runs weekly and alerts on any charge without a matching provider event id.",
+          "created": "2026-06-24T14:50:00Z"
+        }
+      ],
+      "labels": [
+        "billing",
+        "money",
+        "webhooks",
+        "enterprise"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-268",
+      "summary": "Typo in invoice PDF template: 'recieved'",
+      "description": "Customer-reported typo in the invoice PDF footer: 'Payment recieved' should be 'Payment received'. Not urgent but embarrassing — it's on every invoice we send.",
+      "status": "Done",
+      "issue_type": "Bug",
+      "priority": "Low",
+      "assignee": "Jake Morrison",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-24T12:30:00Z",
+      "updated": "2026-06-25T09:00:00Z",
+      "comments": [],
+      "labels": [
+        "billing",
+        "polish"
+      ],
+      "resolution": "Fixed"
+    },
+    {
+      "key": "ACME-204",
+      "summary": "Return Retry-After headers from the API rate limiter",
+      "description": "When a request is throttled, return a Retry-After header (seconds until the bucket refills) alongside the 429 so well-behaved clients can back off precisely instead of guessing. Documented in the API Rate Limiting Policy page on Confluence.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Priya Sharma",
+      "reporter": "Dan Kim",
+      "created": "2026-06-02T10:00:00Z",
+      "updated": "2026-06-08T12:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "Shipped. Confluence rate-limiting page updated with the header semantics; client SDKs honor it as of v3.2.",
+          "created": "2026-06-08T11:50:00Z"
+        }
+      ],
+      "labels": [
+        "api",
+        "rate-limiting"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-209",
+      "summary": "Status page auto-updates from monitoring alerts",
+      "description": "status.acmetech.dev now subscribes to the same alert stream the on-call gets paged on, auto-posting 'degraded performance — investigating' entries for paging-severity alerts. Support reports this cut 'is it down?' tickets roughly in half.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Raj Patel",
+      "reporter": "Tom O'Connell",
+      "created": "2026-06-03T09:00:00Z",
+      "updated": "2026-06-11T15:00:00Z",
+      "comments": [
+        {
+          "author": "Tom O'Connell",
+          "body": "Confirmed from the support queue: 'is it down' tickets dropped ~50% the first week. Best support-adjacent ship this quarter.",
+          "created": "2026-06-11T14:50:00Z"
+        }
+      ],
+      "labels": [
+        "monitoring",
+        "status-page",
+        "support-driven"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-217",
+      "summary": "Make webhook signature verification mandatory on all inbound integrations",
+      "description": "Inbound webhooks from third-party integrations are accepted without signature verification on 4 of 9 endpoints. Make HMAC signature verification mandatory everywhere; publish a migration guide on Confluence for integration partners with a 30-day deprecation window for unsigned calls.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Priya Sharma",
+      "reporter": "Sarah Chen",
+      "created": "2026-06-09T09:00:00Z",
+      "updated": "2026-06-20T14:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "All 9 endpoints now verify signatures. Migration guide is up on Confluence; unsigned calls log a deprecation warning until July 20, then hard-reject.",
+          "created": "2026-06-20T13:50:00Z"
+        }
+      ],
+      "labels": [
+        "security",
+        "webhooks"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-224",
+      "summary": "Devcontainer-based development environment for all engineers",
+      "description": "Standardize local dev on a devcontainer so setup is one command and 'works on my machine' disappears. Policy: never install packages globally on dev boxes — everything goes through the devcontainer. New-hire setup time target: under 15 minutes.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Elena Petrov",
+      "reporter": "Marcus Webb",
+      "created": "2026-05-20T10:00:00Z",
+      "updated": "2026-06-06T11:00:00Z",
+      "comments": [
+        {
+          "author": "Chris Novak",
+          "body": "Data point from the newest hire: full setup took 8 minutes flat. Whoever built this, thank you.",
+          "created": "2026-06-06T10:45:00Z"
+        }
+      ],
+      "labels": [
+        "developer-experience",
+        "onboarding"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-236",
+      "summary": "Alert on DB connection pool saturation (fire at 80%)",
+      "description": "Monitoring gap found during the ACME-201 review: we had no alert on database connection pool saturation, so the June 9 exhaustion was only detected via the downstream error-rate alert. Add a pool-usage alert firing at 80% with a direct link to the pool dashboard.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Elena Petrov",
+      "reporter": "Raj Patel",
+      "created": "2026-06-10T14:00:00Z",
+      "updated": "2026-06-11T10:00:00Z",
+      "comments": [],
+      "labels": [
+        "postmortem",
+        "monitoring",
+        "database"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-247",
+      "summary": "Update deployment runbook: smoke tests, 5% canary, 30-min bake, rollback criteria",
+      "description": "The Confluence deployment runbook is dangerously out of date — it still describes deploying straight to prod after staging. The actual process since the January outage is: staging → smoke tests (`make smoke`, 14 checks, any failure stops the deploy) → canary at 5% → automatic promote after 30 minutes of clean metrics.\n\nRollback criteria that must be documented: error rate >2% sustained over 5 minutes OR p99 >800ms sustained over 5 minutes triggers auto-rollback; anyone on the team can hit the manual rollback button without asking permission. Canary bake time is 30 minutes minimum (changed from 10 after ACME-201).\n\nAt least two engineers have almost followed the old flow. This is the highest-value doc fix we have.",
+      "status": "In Progress",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Marcus Webb",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-04T12:00:00Z",
+      "updated": "2026-06-26T10:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Please prioritize — I almost followed the old flow last week and Chris actually did on his first deploy. The doc drift is a real hazard.",
+          "created": "2026-06-05T09:30:00Z"
+        }
+      ],
+      "labels": [
+        "documentation",
+        "deployment"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-252",
+      "summary": "Run smoke test suite on PRs touching api/ or services/ (path-filtered)",
+      "description": "Run the 90-second smoke suite on every PR that touches api/ or services/, not just pre-deploy. The June 9 incident (ACME-201) would have been caught by exactly this — the leaking error path failed a smoke check. Path-filtered to keep CI cost sane; frontend-only diffs skip it.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Priya Sharma",
+      "reporter": "Priya Sharma",
+      "created": "2026-06-11T10:00:00Z",
+      "updated": "2026-06-13T16:00:00Z",
+      "comments": [
+        {
+          "author": "Marcus Webb",
+          "body": "Shipped fast, nice turnaround. Watch the CI bill for a couple weeks — if it's noisy we can narrow the path filter.",
+          "created": "2026-06-13T15:50:00Z"
+        }
+      ],
+      "labels": [
+        "ci",
+        "postmortem",
+        "testing"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-254",
+      "summary": "Epic: Rate limit usage dashboard (phase 1 — visibility + legacy plan migration)",
+      "description": "Rate limits are 3 of our top-10 support themes. Phase 1 (this epic): a live per-account usage dashboard so customers can see their consumption against their limits, plus migration of legacy-plan accounts to current limits (legacy accounts have half the limits and no visibility — most of the confused tickets). Phase 2 (later, separate epic): per-endpoint limits.\n\nDecision from product review: visibility first, don't boil the ocean — the dashboard is a week of work, a per-endpoint limiter is a quarter.",
+      "status": "In Progress",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Jake Morrison",
+      "reporter": "Dan Kim",
+      "created": "2026-06-06T11:00:00Z",
+      "updated": "2026-06-28T14:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Carry-over from sprint 46, 90% done — just needs review, don't re-estimate as fresh work.",
+          "created": "2026-06-20T10:00:00Z"
+        },
+        {
+          "author": "Priya Sharma",
+          "body": "Bumping priority after the Globex incident (ACME-270) — the dashboard would have let them self-diagnose the misapplied tier in minutes.",
+          "created": "2026-06-27T16:25:00Z"
+        }
+      ],
+      "labels": [
+        "rate-limiting",
+        "epic",
+        "support-driven"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-255",
+      "summary": "Remove moment.js from the frontend bundle",
+      "description": "moment.js is 40% of our JS bundle. Replace with date-fns (tree-shakeable) and the native Intl APIs. Expected bundle reduction ~180KB gzipped.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Jake Morrison",
+      "reporter": "Jake Morrison",
+      "created": "2026-06-16T13:00:00Z",
+      "updated": "2026-06-23T11:00:00Z",
+      "comments": [
+        {
+          "author": "Jake Morrison",
+          "body": "Done — bundle down 178KB gzipped, dashboard first paint improved ~300ms on the median connection.",
+          "created": "2026-06-23T10:50:00Z"
+        }
+      ],
+      "labels": [
+        "frontend",
+        "performance"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-258",
+      "summary": "Q2 quarterly dependency update rotation",
+      "description": "Quarterly dependency-update rotation, Q2 edition — this quarter's rotation owner: Lucy Tran. Checklist: backend Python deps, frontend npm deps, base images, GitHub Actions versions. Security patches merge immediately; majors get a spike ticket each.",
+      "status": "In Progress",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Lucy Tran",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-17T10:00:00Z",
+      "updated": "2026-06-30T12:00:00Z",
+      "comments": [],
+      "labels": [
+        "maintenance",
+        "dependencies"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-259",
+      "summary": "Tune read-replica failover: 4 minutes → 90 second target",
+      "description": "The chaos drill (killed the read replica in staging) showed failover works but takes 4 minutes against a 90-second target. Health-check interval and DNS TTL are the main contributors. Tune: health check 30s → 5s, DNS TTL 120s → 15s, and pre-warm the standby's connection pool.",
+      "status": "Open",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Raj Patel",
+      "reporter": "Raj Patel",
+      "created": "2026-06-23T09:30:00Z",
+      "updated": "2026-06-23T09:30:00Z",
+      "comments": [],
+      "labels": [
+        "reliability",
+        "database",
+        "chaos-drill"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-260",
+      "summary": "Document feature flag precedence (LaunchDarkly > YAML > env)",
+      "description": "Feature flag precedence is tribal knowledge — we have env vars, the YAML file, and LaunchDarkly, and the winning order (LaunchDarkly > YAML > env) was documented nowhere except a Slack message. Write it up as a Confluence page under Engineering, including how to check the effective value of a flag in each environment. Also note: secrets never go in the YAML config — that file is in git; use the vault.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Lucy Tran",
+      "reporter": "Sarah Chen",
+      "created": "2026-06-12T15:00:00Z",
+      "updated": "2026-06-18T10:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Page is up under Engineering, linked from the onboarding checklist. Includes a 'which value wins?' debugging table per environment.",
+          "created": "2026-06-18T09:50:00Z"
+        }
+      ],
+      "labels": [
+        "documentation",
+        "feature-flags"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-262",
+      "summary": "Changelog RSS feed",
+      "description": "Customers keep asking for an RSS/Atom feed of the public changelog so they can pipe releases into their own Slack. Tiny ticket, big goodwill — serve the existing changelog data as an Atom feed at /changelog.xml.",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Low",
+      "assignee": "Jake Morrison",
+      "reporter": "Dan Kim",
+      "created": "2026-06-24T09:00:00Z",
+      "updated": "2026-06-27T11:00:00Z",
+      "comments": [],
+      "labels": [
+        "api",
+        "changelog"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-263",
+      "summary": "Show request id in the error page footer for support debugging",
+      "description": "Support says the single most useful thing a customer can give them is the request id from an error page — but today it's only in a response header. Render the request id in the error page footer with a copy button so customers can screenshot or paste it into tickets.\n\n(First PR from Chris Novak.)",
+      "status": "Done",
+      "issue_type": "Story",
+      "priority": "Medium",
+      "assignee": "Chris Novak",
+      "reporter": "Raj Patel",
+      "created": "2026-06-18T11:00:00Z",
+      "updated": "2026-06-22T15:30:00Z",
+      "comments": [
+        {
+          "author": "Marcus Webb",
+          "body": "Reviewed, two small comments. Solid first PR.",
+          "created": "2026-06-19T14:00:00Z"
+        },
+        {
+          "author": "Chris Novak",
+          "body": "Comments addressed and merged! (Told prod access unlocks after this — see ACME-227.)",
+          "created": "2026-06-22T15:25:00Z"
+        }
+      ],
+      "labels": [
+        "support-driven",
+        "first-pr"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-273",
+      "summary": "Export flow UX: users expect a direct download, we email a link",
+      "description": "The 'export my data' feature confuses users — everyone expects a direct download but we email a link (async job). Validated in 5/5 user interviews: nobody understood the emailed-link model. Compounded by export emails landing in Outlook junk (ACME-234, fixed).\n\nPROPOSAL: show an in-app progress indicator and trigger the download in the browser when the job completes; keep the email as a fallback for large exports or closed tabs.",
+      "status": "In Progress",
+      "issue_type": "Story",
+      "priority": "High",
+      "assignee": "Jake Morrison",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-08T15:00:00Z",
+      "updated": "2026-06-29T10:00:00Z",
+      "comments": [
+        {
+          "author": "Dan Kim",
+          "body": "User-interview takeaway confirms this: all five participants expected a direct download. Carry-over into sprint 47, top of the UX pile.",
+          "created": "2026-06-25T13:00:00Z"
+        }
+      ],
+      "labels": [
+        "ux",
+        "exports",
+        "support-driven"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-206",
+      "summary": "Provision day-1 staging access for Chris Novak",
+      "description": "Per the access policy — new engineers get staging access on day 1, prod after their first merged PR. Provision staging creds from the vault, plus Grafana read-only for dashboards/logs/traces (not gated). Walk-through scheduled for 2pm day 1.",
+      "status": "Done",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "assignee": "Priya Sharma",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-02T09:00:00Z",
+      "updated": "2026-06-02T16:00:00Z",
+      "comments": [],
+      "labels": [
+        "onboarding",
+        "access"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-214",
+      "summary": "Assign onboarding buddy for Chris Novak",
+      "description": "Buddy assignment per policy: assign a buddy from the same team — backend hires get backend buddies. Priya Sharma assigned (senior backend, next on the roster). Buddy owns week-1 check-ins and is the default 'dumb questions welcome' contact.",
+      "status": "Done",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "assignee": "Marcus Webb",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-01T14:00:00Z",
+      "updated": "2026-06-02T10:00:00Z",
+      "comments": [],
+      "labels": [
+        "onboarding",
+        "buddy-system"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-227",
+      "summary": "Grant prod read access to Chris Novak (first PR merged)",
+      "description": "Chris's first PR merged (ACME-263), which unlocks prod read access per the standing policy: staging on day 1, prod after first merged PR. Grant prod read creds (ssh/db read-only). Deploy rights come later, after he shadows one deploy train.",
+      "status": "Done",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "assignee": "Priya Sharma",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-22T16:00:00Z",
+      "updated": "2026-06-23T10:00:00Z",
+      "comments": [
+        {
+          "author": "Priya Sharma",
+          "body": "Granted. Reminder of the full ladder for whoever reads this next: dashboards/logs day 1, prod ssh/db read after first merged PR, deploy rights after first shadowed deploy.",
+          "created": "2026-06-23T09:55:00Z"
+        }
+      ],
+      "labels": [
+        "onboarding",
+        "access"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-246",
+      "summary": "Pre-provision accounts for July 14 new hire (senior backend)",
+      "description": "Next hire starts July 14 (backend, senior). Lucy is buddy per the roster. Pre-request GitHub org invite, Jira, Confluence, Tailscale, and staging creds this week so day 1 isn't spent waiting on IT. Also confirm the security-training link is issued in week 1 — it expires after 7 days.",
+      "status": "Open",
+      "issue_type": "Task",
+      "priority": "Medium",
+      "assignee": "Lucy Tran",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-25T11:00:00Z",
+      "updated": "2026-06-25T11:00:00Z",
+      "comments": [],
+      "labels": [
+        "onboarding",
+        "access"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-269",
+      "summary": "Rewrite New Hire Onboarding Checklist page",
+      "description": "The Confluence onboarding checklist is stale and actively misleads new hires:\n- Still instructs requesting VPN access — the link 404s; we migrated to Tailscale months ago\n- Missing the access ladder table: dashboards/logs/traces day 1, prod ssh/db read after first merged PR, deploy rights after first shadowed deploy\n- Missing week-1 gotchas: staging auth 503s after deploys (ACME-238), `make deploy` vs `make ship`, devcontainer-only package policy\n\nChris Novak (most recent victim of the stale page) volunteered to rewrite it; his week-1 confusions doc gets merged in as an appendix.",
+      "status": "In Progress",
+      "issue_type": "Task",
+      "priority": "High",
+      "assignee": "Chris Novak",
+      "reporter": "Marcus Webb",
+      "created": "2026-06-19T10:00:00Z",
+      "updated": "2026-06-30T14:00:00Z",
+      "comments": [
+        {
+          "author": "Chris Novak",
+          "body": "Draft is up: Tailscale steps, the access table, and my week-1 confusions appendix (staging 503s, the VPN 404, which make target to use). Review requested from Marcus and Priya.",
+          "created": "2026-06-30T13:50:00Z"
+        }
+      ],
+      "labels": [
+        "onboarding",
+        "documentation"
+      ],
+      "resolution": null
+    },
+    {
+      "key": "ACME-208",
+      "summary": "Support escalation: Initech enterprise SSO login failures",
+      "description": "Initech (enterprise) reports intermittent SAML login failures for ~20% of attempts. Escalated immediately per the security/billing/data-loss rule. Root cause: 90-second clock skew on one of their IdP nodes pushed assertions outside our 60-second NotBefore tolerance. Widened tolerance to 5 minutes (per SAML spec guidance) and added skew detail to the error we return.",
+      "status": "Done",
+      "issue_type": "Support Escalation",
+      "priority": "High",
+      "assignee": "Priya Sharma",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-06T10:30:00Z",
+      "updated": "2026-06-09T12:00:00Z",
+      "comments": [
+        {
+          "author": "Aisha Diallo",
+          "body": "Enterprise P1 — 1h first-response SLA clock started 10:30. Verified myself before escalating: reproduced with their metadata, request ids attached.",
+          "created": "2026-06-06T10:35:00Z"
+        },
+        {
+          "author": "Priya Sharma",
+          "body": "Fix deployed. Told their admin about the skewed IdP node too — they fixed their side, belt and suspenders.",
+          "created": "2026-06-09T11:50:00Z"
+        }
+      ],
+      "labels": [
+        "enterprise",
+        "sso",
+        "sla"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-220",
+      "summary": "Support escalation: GDPR deletion request — account #4482",
+      "description": "Customer invoked GDPR right-to-erasure. Per policy: privacy macro used, legal@ cc'd, no improvised answers. Engineering task: run the deletion pipeline for account #4482, verify removal from primary DB, replicas, search index, analytics, and backups-exclusion list; produce the completion certificate for legal within the 30-day statutory window.",
+      "status": "Done",
+      "issue_type": "Support Escalation",
+      "priority": "High",
+      "assignee": "Lucy Tran",
+      "reporter": "Tom O'Connell",
+      "created": "2026-06-13T09:00:00Z",
+      "updated": "2026-06-20T15:00:00Z",
+      "comments": [
+        {
+          "author": "Lucy Tran",
+          "body": "Deletion pipeline completed, verification checklist attached, certificate sent to legal@. Search index purge needed a manual step — filed a follow-up to automate it.",
+          "created": "2026-06-20T14:45:00Z"
+        }
+      ],
+      "labels": [
+        "gdpr",
+        "privacy",
+        "legal"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-253",
+      "summary": "Support escalation: Northwind $12k refund request (duplicate charge)",
+      "description": "Northwind (enterprise) requested a $12,000 refund. Per policy, any enterprise refund over $5,000 loops in the account manager before processing — Emma Wright engaged. Investigation with their admin showed the charge was a duplicate created by the checkout webhook bug (ACME-266), not a cancellation: refund the duplicate charge, keep the subscription.\n\nOutcome: duplicate refunded, root-cause bug ticketed, and Northwind signed a 2-year renewal two weeks later.",
+      "status": "Done",
+      "issue_type": "Support Escalation",
+      "priority": "High",
+      "assignee": "Emma Wright",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-13T14:00:00Z",
+      "updated": "2026-06-17T10:00:00Z",
+      "comments": [
+        {
+          "author": "Emma Wright",
+          "body": "Half the time a big refund request is really a renewal negotiation in disguise. This one was a genuine billing bug — but handling it fast and honestly is exactly why they renewed.",
+          "created": "2026-06-17T09:50:00Z"
+        },
+        {
+          "author": "Tom O'Connell",
+          "body": "For the record, the thresholds: self-serve under $1000 support processes directly, $1000–5000 needs support-lead sign-off, over $5000 goes to finance; enterprise over $5000 always loops in the account manager first.",
+          "created": "2026-06-17T09:58:00Z"
+        }
+      ],
+      "labels": [
+        "enterprise",
+        "refund",
+        "billing"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-265",
+      "summary": "Support escalation: Globex SLA credit request after June 9 outage",
+      "description": "Globex requested service credits for the June 9 P0 outage (ACME-201, 38 minutes of API degradation). Per the enterprise SLA: 5% of monthly fee per breach, capped at 20% per month. This is their first breach this quarter, so no exec review triggered (that takes 2 breaches/quarter). Credit approved and applied to the July invoice; customer-safe incident summary shared from the postmortem.",
+      "status": "Done",
+      "issue_type": "Support Escalation",
+      "priority": "Medium",
+      "assignee": "Tom O'Connell",
+      "reporter": "Emma Wright",
+      "created": "2026-06-11T11:00:00Z",
+      "updated": "2026-06-13T14:00:00Z",
+      "comments": [
+        {
+          "author": "Tom O'Connell",
+          "body": "Credit applied: 5% of monthly fee. Sent them the customer-safe summary — root cause, fix shipped (ACME-235), and the new pool-saturation alerting. They appreciated the transparency.",
+          "created": "2026-06-13T13:50:00Z"
+        }
+      ],
+      "labels": [
+        "enterprise",
+        "sla",
+        "credits"
+      ],
+      "resolution": "Done"
+    },
+    {
+      "key": "ACME-271",
+      "summary": "Support escalation: Stripe refund fails with charge_already_refunded, customer never received funds",
+      "description": "Stripe rejected a refund with 'charge_already_refunded' but the customer verifiably never received the money. Support followed the documented path: when a Stripe refund fails, create a manual credit note in billing (Billing > Credits > New, original charge id in the memo — credits auto-apply oldest-first to the next invoice).\n\nFiled with BOTH charge ids for engineering, per the ask to collect data points on the suspected webhook race (ACME-221). Engineering believes this is the double-refund race: the first refund succeeded internally but its confirmation was swallowed, so our records showed it as failed.",
+      "status": "In Progress",
+      "issue_type": "Support Escalation",
+      "priority": "High",
+      "assignee": "Lucy Tran",
+      "reporter": "Aisha Diallo",
+      "created": "2026-06-15T13:30:00Z",
+      "updated": "2026-06-29T11:30:00Z",
+      "comments": [
+        {
+          "author": "Aisha Diallo",
+          "body": "Credit note issued, customer confirmed it applied to their invoice. Both charge ids attached for the eng investigation.",
+          "created": "2026-06-15T14:00:00Z"
+        },
+        {
+          "author": "Lucy Tran",
+          "body": "Every one of these data points helps — this instance confirms the race window is on the confirmation read-back, not the refund call. Fix lands with ACME-221.",
+          "created": "2026-06-29T11:20:00Z"
+        }
+      ],
+      "labels": [
+        "stripe",
+        "billing",
+        "support-driven"
+      ],
+      "resolution": null
+    }
+  ]
+}

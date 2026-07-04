@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "onboarding buddy roster updated for q3 \u2014 check the sheet if you're up",
+  "ts": "1780478100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "first PR merged!! (ACME-263) does this mean i get prod access now :eyes:",
+  "ts": "1780495320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "it does! prod read creds granted, deploy rights after you shadow one deploy train. welcome to the club",
+  "ts": "1780510500.000000"
+ }
+]

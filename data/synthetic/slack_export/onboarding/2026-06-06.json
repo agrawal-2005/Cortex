@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "this is gold, merged into the checklist. this is exactly what the buddy system is for",
+  "ts": "1780737660.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "PSA the security training link expires after 7 days \u2014 new hires do it in week 1 or IT has to reissue it",
+  "ts": "1780743660.000000"
+ },
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "sales/CS onboarding now includes a support-ticket shadowing day too \u2014 knowing the product's rough edges helps everyone",
+  "ts": "1780753980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "q2 onboarding retro: avg time-to-first-PR is 6 days, down from 11 last year. buddy system + devcontainer get the credit",
+  "ts": "1780762560.000000"
+ }
+]

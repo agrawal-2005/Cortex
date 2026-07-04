@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "deploy train leaves at 3pm today, get your PRs merged by 2:30 or catch tomorrow's",
+  "ts": "1780650420.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "merged the retry-logic fix for the webhook dispatcher, see ACME-231",
+  "ts": "1780664700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "new eslint config landed, run `npm run lint:fix` before your next commit or CI will yell at you",
+  "ts": "1780669800.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "psa: the api rate limiter now returns Retry-After headers, clients should honor them (see the API Rate Limiting Policy page in Confluence)",
+  "ts": "1780681500.000000"
+ }
+]

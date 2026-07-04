@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "pricing page A/B results: variant B (usage calculator) converts 18% better. shipping it",
+  "ts": "1780737480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "reminder PRDs get a tech review BEFORE they're committed to the roadmap \u2014 eng finding out at sprint planning is too late",
+  "ts": "1780753140.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "the changelog RSS feed people keep asking for ships this week, tiny ticket, big goodwill",
+  "ts": "1780770780.000000"
+ }
+]

@@ -1,0 +1,102 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "welcome @chris.novak! :wave: your onboarding buddy is priya (same team, backend). Assign a buddy from the same team \u2014 that's the rule, so backend folks get backend buddies",
+  "ts": "1780395300.000000",
+  "thread_ts": "1780395300.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "thanks! laptop's set up, what access should i have on day 1?",
+  "ts": "1780395840.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "New engineers get access to staging on day 1, prod after their first merged PR. that's the standing policy \u2014 staging creds come from the vault, i'll walk you through it at 2",
+  "ts": "1780396080.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "cool. github org invite hasn't arrived yet btw",
+  "ts": "1780396260.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "sent, check again. also request jira + confluence via the #it-requests form, takes ~an hour",
+  "ts": "1780396980.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "in. the New Hire Onboarding Checklist page on Confluence says to request VPN access but the link 404s?",
+  "ts": "1780397220.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "that page predates the VPN migration \u2014 we're on tailscale now, invite sent to your email. flagging the page for an update",
+  "ts": "1780398300.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "tailscale connected. day 1 basically done, thanks all :raised_hands:",
+  "ts": "1780398840.000000",
+  "thread_ts": "1780395300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "should new hires really wait for a merged PR to get prod READ access? debugging without prod logs is rough",
+  "ts": "1780410060.000000",
+  "thread_ts": "1780410060.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "the policy is about prod WRITE. read-only log access via grafana is fine from day 1, that's not gated",
+  "ts": "1780411440.000000",
+  "thread_ts": "1780410060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "clarifying because this confuses everyone: prod ssh/db = after first merged PR. dashboards/logs/traces = day 1. deploy rights = after your first shadowed deploy",
+  "ts": "1780412460.000000",
+  "thread_ts": "1780410060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "can we put THAT table in the onboarding checklist? clearer than what's there now",
+  "ts": "1780412940.000000",
+  "thread_ts": "1780410060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "yes \u2014 and while we're at it the checklist still lists the old VPN. it needs a real pass, ACME-269",
+  "ts": "1780414080.000000",
+  "thread_ts": "1780410060.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "as the most recent victim of that page i volunteer to rewrite it :sweat_smile:",
+  "ts": "1780414440.000000",
+  "thread_ts": "1780410060.000000"
+ }
+]

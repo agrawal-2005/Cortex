@@ -1,0 +1,32 @@
+[
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "sendgrid recovered, reset emails flowing. backlog drained by 18:20",
+  "ts": "1780651680.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "ACME-235 (the pool leak fix) is merged and deployed. canary was clean. that closes the last june 9 action item",
+  "ts": "1780658040.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "on-call schedule for july is up \u2014 new joiners shadow first rotation, you page WITH someone before you page alone",
+  "ts": "1780668300.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "chaos drill friday: we kill the read replica in staging and verify failover. observers welcome",
+  "ts": "1780677900.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "drill result: failover worked but took 4 min vs the 90s target. tuning ticket is ACME-259",
+  "ts": "1780682520.000000"
+ }
+]

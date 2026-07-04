@@ -62,6 +62,10 @@ export function getDocuments(params = {}) {
   return v1.get('/ingest/documents', { params })
 }
 
+export function getDocumentSourceTypes() {
+  return v1.get('/ingest/documents/source-types')
+}
+
 // ── Ingestion ───────────────────────────────────────────────────────────────
 
 export function uploadSlackExport(file) {
@@ -77,6 +81,22 @@ export function uploadFile(file, sourceType) {
   form.append('file', file)
   form.append('source_type', sourceType)
   return api.post('/ingest/file', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function uploadJiraExport(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/ingest/jira', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function uploadConfluenceExport(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/ingest/confluence', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

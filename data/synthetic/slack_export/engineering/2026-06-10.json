@@ -1,0 +1,20 @@
+[
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "postgres 16 upgrade on staging went clean, prod scheduled for next tuesday 6am",
+  "ts": "1781082900.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "quarterly dependency-update rotation falls on lucy this month, list is in ACME-258",
+  "ts": "1781090580.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "please stop naming test users 'test' 'test2' 'testtest' in staging, i beg :pray:",
+  "ts": "1781107440.000000"
+ }
+]

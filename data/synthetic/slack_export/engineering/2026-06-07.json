@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "test parallelism regressed when we bumped the runner image, fix incoming in ACME-244",
+  "ts": "1780823100.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "storybook is broken on main, reverting the theme PR until i figure it out",
+  "ts": "1780832940.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "reminder: secrets NEVER go in the yaml config, that file is in git. use the vault, always",
+  "ts": "1780838700.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "great sprint everyone, 14 tickets closed and zero prod incidents this week :tada:",
+  "ts": "1780853040.000000"
+ }
+]

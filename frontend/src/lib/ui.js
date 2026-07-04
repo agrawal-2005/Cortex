@@ -39,6 +39,19 @@ export function formatDate(value) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Map Document.source_type values to integration keys (single source of
+// truth — used by both the Dashboard stat and the Data Sources page so the
+// two never disagree about what is "connected"). Generic rule: the key is
+// the prefix before the first "_" (github_pr → github), so any newly
+// ingested source type shows up without code changes. Aliases cover
+// source types whose integration key differs from their prefix.
+const SOURCE_KEY_ALIASES = { custom_api: 'api', custom: 'file' }
+
+export function sourceKeyOf(sourceType) {
+  if (!sourceType) return null
+  return SOURCE_KEY_ALIASES[sourceType] || sourceType.split('_')[0]
+}
+
 export function timeAgo(value) {
   if (!value) return '—'
   const d = new Date(value)

@@ -1,0 +1,32 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "next new hire starts july 14 (backend, senior). lucy you're up as buddy per the roster",
+  "ts": "1780651560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "on it. i'll pre-request their accounts this week so day 1 isn't spent waiting on IT",
+  "ts": "1780668600.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "support onboarding differs from eng btw \u2014 new support folks shadow tickets for a week before touching the queue. doc is linked from the main checklist",
+  "ts": "1780672920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "30/60/90 check-in template is updated, managers grab it from the People space",
+  "ts": "1780678620.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "wrote up my week-1 confusions as a doc appendix: staging 503s, the VPN 404, which make target to use. future hires should suffer less",
+  "ts": "1780683180.000000"
+ }
+]

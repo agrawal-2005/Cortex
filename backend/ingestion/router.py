@@ -87,6 +87,19 @@ async def list_documents(
     return [DocumentResponse.model_validate(row) for row in rows]
 
 
+@router.get("/documents/source-types", response_model=list[str])
+async def list_source_types(
+    db: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """List the distinct source_types of all ingested documents.
+
+    Used by the UI to show which integrations are connected without
+    paginating through every document.
+    """
+    result = await db.execute(select(Document.source_type).distinct())
+    return [row for row in result.scalars().all() if row]
+
+
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: str,

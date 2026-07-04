@@ -1,0 +1,107 @@
+[
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "SLA refresher since we onboarded 3 new enterprise accounts: enterprise gets 1h first-response on P1s, 4h on P2s. the clock starts when the ticket lands, not when we see it",
+  "ts": "1780564980.000000",
+  "thread_ts": "1780564980.000000",
+  "reply_count": 6
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "what happens if we breach?",
+  "ts": "1780565520.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "we owe service credits \u2014 5% of monthly fee per breach, caps at 20%. more importantly, 2 breaches in a quarter triggers an exec review with the account",
+  "ts": "1780565880.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "and I have to sit in that review, so please page me BEFORE a breach not after :melting_face:",
+  "ts": "1780566960.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "right \u2014 if a P1 is 40 min old and untouched, escalate to me and Emma immediately. the escalation matrix on Confluence has the full chain",
+  "ts": "1780567980.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "does the SLA clock pause overnight?",
+  "ts": "1780568220.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "for standard accounts yes, for enterprise no \u2014 that's why we have the follow-the-sun rotation with the contractor team",
+  "ts": "1780568400.000000",
+  "thread_ts": "1780564980.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "when do i escalate a support ticket to engineering vs just filing a bug?",
+  "ts": "1780574460.000000",
+  "thread_ts": "1780574460.000000",
+  "reply_count": 5
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "rule of thumb: data loss, security, or billing errors = escalate immediately (page if outside hours). everything else = file the bug, eng triages next standup",
+  "ts": "1780574820.000000",
+  "thread_ts": "1780574460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "and escalate how, the #incidents channel?",
+  "ts": "1780576140.000000",
+  "thread_ts": "1780574460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "yes, post in #incidents with the ticket link + customer impact + what you've verified. don't just say 'X is broken', say what you tested",
+  "ts": "1780576560.000000",
+  "thread_ts": "1780574460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "from the eng side: the single most useful thing support gives us is a request id from the error page. train customers to screenshot it",
+  "ts": "1780577940.000000",
+  "thread_ts": "1780574460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "adding that to our macros :ok_hand:",
+  "ts": "1780578840.000000",
+  "thread_ts": "1780574460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "weekly support stats: 214 tickets, 92% within SLA, csat 4.6. good week team",
+  "ts": "1780583460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "customer found a typo in the invoice pdf ('recieved') \u2014 filed ACME-268, not urgent but embarrassing lol",
+  "ts": "1780597980.000000"
+ }
+]

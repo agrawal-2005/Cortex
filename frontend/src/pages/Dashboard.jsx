@@ -7,10 +7,10 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
-import { getSkills, getDocuments } from '../api/client'
+import { getSkills, getDocuments, getDocumentSourceTypes } from '../api/client'
 import { Skeleton, SkeletonCard, EmptyState, StatusBadge, ConfidenceBar, Button } from '../components/Primitives'
 import SourceIcon from '../components/SourceIcon'
-import { confidenceColor, pct, timeAgo } from '../lib/ui'
+import { confidenceColor, pct, timeAgo, sourceKeyOf } from '../lib/ui'
 
 const DEPT_COLORS = ['#6C5CE7', '#00D2FF', '#00E676', '#FFB300', '#FF79C6', '#8888A0']
 
@@ -30,29 +30,33 @@ function StatCard({ icon: Icon, label, value, sub, accent = 'text-primary' }) {
 export default function Dashboard() {
   const [skills, setSkills] = useState(null)
   const [documents, setDocuments] = useState(null)
+  const [sourceTypes, setSourceTypes] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([
       getSkills({ limit: 100 }),
       getDocuments({ limit: 100 }),
+      getDocumentSourceTypes(),
     ])
-      .then(([skillsRes, docsRes]) => {
+      .then(([skillsRes, docsRes, typesRes]) => {
         setSkills(skillsRes.data.items || skillsRes.data.skills || [])
         setDocuments(Array.isArray(docsRes.data) ? docsRes.data : docsRes.data.items || [])
+        setSourceTypes(Array.isArray(typesRes.data) ? typesRes.data : [])
       })
       .catch((e) => setError(e.message))
   }, [])
 
   const stats = useMemo(() => {
-    if (!skills || !documents) return null
+    if (!skills || !documents || !sourceTypes) return null
     const verified = skills.filter((s) => s.status === 'verified').length
     const inReview = skills.filter((s) => s.status === 'review' || s.status === 'draft').length
     const avgConf = skills.length
       ? skills.reduce((acc, s) => acc + (s.confidence || 0), 0) / skills.length
       : 0
     // Dedupe github_issue / github_pr / github_doc etc. down to one source key
-    const sourceKeys = [...new Set(documents.map((d) => (d.source_type || '').split('_')[0]))]
+    // (same sourceKeyOf as the Data Sources page, so both pages agree)
+    const sourceKeys = [...new Set(sourceTypes.map(sourceKeyOf).filter(Boolean))]
     const byDept = {}
     for (const s of skills) {
       const dept = s.department || 'general'
@@ -62,7 +66,7 @@ export default function Dashboard() {
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
     return { verified, inReview, avgConf, sourceKeys, deptData }
-  }, [skills, documents])
+  }, [skills, documents, sourceTypes])
 
   const needsReview = useMemo(
     () =>

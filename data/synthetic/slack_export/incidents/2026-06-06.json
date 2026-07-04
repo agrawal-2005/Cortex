@@ -1,0 +1,32 @@
+[
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "quarterly incident review: 2 P0s, 5 P1s, MTTR down 35% from q1. the canary process is paying for itself",
+  "ts": "1780736460.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "shadowed my first page with raj last night. false alarm but i now know where the runbooks live :sweat_smile:",
+  "ts": "1780746180.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "that's the way to learn it. next one you drive, i watch",
+  "ts": "1780755600.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "reminder from support-land: when an incident hits enterprise accounts, i need impact + eta in customer-safe language within 30 min for the SLA comms",
+  "ts": "1780758480.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "fair \u2014 added a 'customer comms' checkbox to the war room checklist so it can't be forgotten",
+  "ts": "1780763340.000000"
+ }
+]

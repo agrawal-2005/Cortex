@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U11",
+  "text": "Northwind renewal signed for 2 more years :tada: thanks for the save on that refund thread",
+  "ts": "1780737360.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "reminder: never share a customer's data with another user on the same account without owner-role confirmation. we almost got burned on this yesterday",
+  "ts": "1780740360.000000"
+ },
+ {
+  "type": "message",
+  "user": "U07",
+  "text": "the status page auto-updates from the monitoring system now?? this cuts our 'is it down' tickets in half",
+  "ts": "1780746540.000000"
+ },
+ {
+  "type": "message",
+  "user": "U10",
+  "text": "yep, shipped that last sprint \u2014 status.acmetech.dev subscribes to the same alerts we get paged on",
+  "ts": "1780765680.000000"
+ }
+]

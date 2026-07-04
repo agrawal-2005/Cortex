@@ -1,0 +1,14 @@
+[
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "that's mine, fixed \u2014 the IAM role rotated. added an alert so it can't fail silently again",
+  "ts": "1781254920.000000"
+ },
+ {
+  "type": "message",
+  "user": "U01",
+  "text": "engineering all-hands moved to friday 11am this week only",
+  "ts": "1781267280.000000"
+ }
+]

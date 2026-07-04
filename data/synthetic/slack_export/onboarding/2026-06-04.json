@@ -1,0 +1,26 @@
+[
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "new-hire tip that isn't written anywhere: the weekly demo friday 4pm is optional to present but mandatory to attend your first month. best way to learn the product",
+  "ts": "1780563960.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": "reminder to new folks: NEVER install packages globally on the dev boxes, everything goes through the devcontainer. saves you from 'works on my machine'",
+  "ts": "1780569600.000000"
+ },
+ {
+  "type": "message",
+  "user": "U12",
+  "text": "the devcontainer setup took 8 min flat, whoever built that thank you",
+  "ts": "1780585500.000000"
+ },
+ {
+  "type": "message",
+  "user": "U05",
+  "text": ":saluting_face:",
+  "ts": "1780599060.000000"
+ }
+]

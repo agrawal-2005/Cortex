@@ -1,0 +1,109 @@
+[
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "sprint 47 planning is thursday 10am. reminder of the process: PMs bring ranked candidates, eng brings capacity, we commit as a team \u2014 nothing enters the sprint after commit without swapping something out",
+  "ts": "1780399320.000000",
+  "thread_ts": "1780399320.000000",
+  "reply_count": 6
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "can we actually enforce the no-mid-sprint-additions rule this time :upside_down_face:",
+  "ts": "1780400460.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "the rule IS the enforcement \u2014 anyone can say no to additions by pointing at it. escalations go through me, not directly to engineers",
+  "ts": "1780401420.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U02",
+  "text": "capacity note: lucy is on dependency-update rotation and chris is still ramping, so plan for ~80%",
+  "ts": "1780401780.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "noted. carry-overs from 46: the rate-limit dashboard (ACME-254) and export-UX fix (ACME-273)",
+  "ts": "1780402680.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "254 is 90% done, just needs review. don't re-estimate it as fresh work",
+  "ts": "1780403100.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "good call, marking it as carry-over-finish. see everyone thursday",
+  "ts": "1780403700.000000",
+  "thread_ts": "1780399320.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "customer feedback theme: our API rate limits confuse people. 3 of the top-10 support themes are rate-limit related. proposal: per-endpoint limits with a live usage dashboard",
+  "ts": "1780420560.000000",
+  "thread_ts": "1780420560.000000",
+  "reply_count": 7
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "per-endpoint is fairer but way more surface area. today it's one global bucket per key (documented on the Confluence rate limiting page)",
+  "ts": "1780421100.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U09",
+  "text": "the legacy plans make it worse \u2014 old accounts have half the limits and no visibility. that's most of the confused tickets honestly",
+  "ts": "1780421340.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "so maybe phase 1 is just the dashboard (visibility) and legacy-plan migration, phase 2 is per-endpoint?",
+  "ts": "1780422300.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U03",
+  "text": "+1, dashboard is a week of work, per-endpoint limiter is a quarter. don't boil the ocean",
+  "ts": "1780423440.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U06",
+  "text": "support strongly endorses the dashboard, we'd deflect a ticket a day minimum",
+  "ts": "1780423740.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U08",
+  "text": "phase 1 it is \u2014 writing the spec today, tickets under ACME-254 epic",
+  "ts": "1780423920.000000",
+  "thread_ts": "1780420560.000000"
+ },
+ {
+  "type": "message",
+  "user": "U04",
+  "text": "i'll take the dashboard UI, been wanting an excuse to touch the usage charts",
+  "ts": "1780425240.000000",
+  "thread_ts": "1780420560.000000"
+ }
+]
