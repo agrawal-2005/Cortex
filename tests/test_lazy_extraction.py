@@ -417,6 +417,119 @@ class TestQueryOnDemandExtraction:
         assert llm_chain.calls == 1
 
 
+# ── Pending cluster vs. weakly-matching existing skill ────────────────────
+
+
+async def seed_skill_with_doc(doc_id, name="access onboarding"):
+    """Existing skill owning one document via cluster provenance."""
+    import uuid
+
+    async with TestSessionLocal() as db:
+        skill = Skill(
+            id=str(uuid.uuid4()),
+            name=name,
+            description=f"How we {name}",
+            confidence=0.7,
+            status="review",
+            skill_data={},
+        )
+        db.add(skill)
+        db.add(SkillDocument(skill_id=skill.id, document_id=doc_id))
+        await db.commit()
+        return skill.id
+
+
+@pytest.mark.usefixtures("real_on_demand")
+class TestPendingBeatsWeakSkillMatch:
+    """Regression: a question about a PENDING topic used to return an
+    unrelated existing skill because one incidental document overlap
+    short-circuited on-demand extraction entirely (e.g. the deploy
+    question answered with the Access Onboarding skill)."""
+
+    @pytest.mark.asyncio
+    async def test_stronger_pending_cluster_extracted_over_weak_skill(
+        self, client, vector_hits, llm_chain
+    ):
+        await seed_documents(["skill-doc", "pend-1", "pend-2"])
+        skill_id = await seed_skill_with_doc("skill-doc")
+        await seed_pending(["pend-1", "pend-2"], topic="deploy smoke staging")
+        # Existing skill's doc is a weak incidental hit (rel 0.35);
+        # the pending cluster owns the strong hits (rel 0.75).
+        vector_hits(
+            make_hits("skill-doc", distance=1.3)
+            + make_hits("pend-1", "pend-2", distance=0.5)
+        )
+
+        res = await client.post(
+            "/api/query/",
+            json={"question": "How do we deploy to staging with smoke tests?"},
+        )
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["skill"]["name"] == VALID_SKILL["name"]
+        assert body["skill"]["id"] != skill_id
+        assert llm_chain.calls == 1
+        rows = await pending_rows()
+        assert rows[0].status == "extracted"
+
+    @pytest.mark.asyncio
+    async def test_stronger_skill_wins_without_llm_call(
+        self, client, vector_hits, llm_chain
+    ):
+        """When the existing skill owns the most relevant doc, it is
+        returned directly and the weaker pending cluster stays pending."""
+        await seed_documents(["skill-doc", "pend-1"])
+        skill_id = await seed_skill_with_doc("skill-doc")
+        await seed_pending(["pend-1"], topic="deploy smoke staging")
+        vector_hits(
+            make_hits("skill-doc", distance=0.5)  # rel 0.75
+            + make_hits("pend-1", distance=1.3)  # rel 0.35
+        )
+
+        res = await client.post(
+            "/api/query/", json={"question": "How do we onboard a new hire?"}
+        )
+
+        assert res.status_code == 200
+        assert res.json()["skill"]["id"] == skill_id
+        assert llm_chain.calls == 0
+        rows = await pending_rows()
+        assert rows[0].status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_tie_keeps_existing_skill(self, real_on_demand, llm_chain):
+        """Equal relevance must not burn an LLM call — existing skill wins."""
+        await seed_documents(["pend-1"])
+        await seed_pending(["pend-1"])
+
+        service = make_service([])
+        async with TestSessionLocal() as db:
+            skill = await service.extract_on_demand(
+                db, {"pend-1": 0.5}, "hint", beat_relevance=0.5
+            )
+        assert skill is None
+        assert llm_chain.calls == 0
+        rows = await pending_rows()
+        assert rows[0].status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_no_loose_extraction_when_skill_exists(
+        self, real_on_demand, llm_chain
+    ):
+        """Docs in no cluster + an existing skill match → never extract
+        ad hoc from the existing skill's own documents."""
+        await seed_documents(["loose-1"])
+
+        service = make_service([])
+        async with TestSessionLocal() as db:
+            skill = await service.extract_on_demand(
+                db, {"loose-1": 0.9}, "hint", beat_relevance=0.4
+            )
+        assert skill is None
+        assert llm_chain.calls == 0
+
+
 # ── Concurrency guard ─────────────────────────────────────────────────────
 
 

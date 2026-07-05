@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <b>Extract how your company actually works. Turn it into workflows AI agents can run.</b>
+  <b>The AI that knows how your company actually works. Cortex turns your team's knowledge into workflows your agents can run.</b>
 </p>
 
 <p align="center">
@@ -117,6 +117,9 @@ Each skill is scored against an automation-readiness rubric (citations, failure 
 ### Source Tracing
 Every step in every skill links back to the exact Slack message, Jira ticket, Confluence page, or GitHub PR it was extracted from. Full transparency and auditability.
 
+### Data Transparency ("Your Data")
+A dedicated **Your Data** page (`/data-overview`) shows exactly what Cortex has ingested: document counts and date ranges per source, truncated sample snippets so you can verify what kind of content was pulled in, and every skill extracted from your data with its source provenance. *This is everything Cortex has processed from your uploads — nothing beyond it has been accessed.* Also available via `GET /api/data-overview/`.
+
 ### Confidence Scoring
 Each skill and step carries a confidence score based on source recency, author authority, behavioral evidence, and community trust scores that improve over time.
 
@@ -124,10 +127,16 @@ Each skill and step carries a confidence score based on source recency, author a
 Domain experts review, approve, edit, or reject extracted skills. Corrections feed back into the extraction pipeline — **verified end-to-end**: reject a step → re-extract → correction appears in the new skill.
 
 ### Query Intelligence
-Natural language queries match skills via cluster-level document provenance (not just LLM-cited sources). Ranking blends the skill's own semantic similarity to the question with document relevance. If the best match is a pending topic, it's extracted on the spot; if no relevant knowledge exists at all, Cortex says so honestly instead of hallucinating a skill.
+Natural language queries match skills via cluster-level document provenance (not just LLM-cited sources). Ranking blends the skill's own semantic similarity to the question with document relevance. If the best match is a pending topic, it's extracted on the spot; if no relevant knowledge exists at all, Cortex says so honestly instead of hallucinating a skill. The Query page is a chat — conversations are stored, follow-ups stay anchored to the skill just answered, and every answer links back to the full skill and its sources.
 
 ### Production-Grade Error Handling
 10 LLM failure modes handled: empty responses, truncated JSON (auto-repaired), markdown fences, wrong schema, timeouts, rate limits (429 backoff), credits exhausted (402 graceful stop), and server errors. Per-cluster commits ensure partial results are never lost. Re-uploading the same export is idempotent — duplicates are detected and skipped.
+
+### Verified Workspace Deletion
+A real cascading hard delete (`DELETE /api/workspace/data`, or Settings → Danger zone with a type-DELETE confirmation): removes all documents, skills, steps, citations, pending topics, feedback, connected sources (including stored tokens), trust scores, and every vector in both ChromaDB collections. After deleting, Cortex **re-counts every table and vector index and fails loudly unless everything is at zero** — it never reports success on a partial delete. API keys are kept so you aren't locked out. Each deletion is logged (timestamp + which key triggered it).
+
+### Data Posture (current, honest)
+Cortex is **single-tenant today**: one deployment serves one company. There is no shared multi-tenant pool, and no per-organization isolation layer yet — which is why we run **one pilot at a time**, with a verified full wipe between customers. The transparency page shows exactly what has been ingested at any moment.
 
 ### Security
 - **API key authentication** on every route (SHA-256 hashed, shown once at creation)
@@ -505,6 +514,20 @@ Cortex/
 - [ ] MCP server (Claude Code/Cursor integration)
 - [ ] Frontend tests
 - [ ] Multi-tenant support
+
+### Known Issues
+- **Extraction can hallucinate tool/step specifics.** The "Rate Limit
+  Usage Dashboard and Legacy Plan Migration" skill invented a
+  "Plan migration script" (step 2) that appears nowhere in the source
+  documents — and gave that step the highest confidence (0.85). The same
+  skill also bundles one-time project work (build the dashboard, migrate
+  legacy plans — the ACME-254 phase-1 epic) into an `is_repeatable: true`
+  skill alongside a genuinely repeatable support procedure.
+  Candidate fixes:
+  1. Tighten the repeatability filter to catch project-epic steps inside
+     otherwise-repeatable skills (split or drop them).
+  2. Ground extracted tool/step names against the actual source text and
+     penalize/flag specifics with no supporting snippet.
 
 ---
 

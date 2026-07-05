@@ -4,9 +4,6 @@ import {
   ClipboardList, FileText, Plug, Gauge, ArrowRight,
   Sparkles, Inbox, AlertTriangle,
 } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts'
 import { getSkills, getDocuments, getDocumentSourceTypes, getSkillStats } from '../api/client'
 import { Skeleton, SkeletonCard, EmptyState, StatusBadge, ConfidenceBar, Button } from '../components/Primitives'
 import SourceIcon from '../components/SourceIcon'
@@ -211,34 +208,30 @@ export default function Dashboard() {
               }
             />
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(160, stats.deptData.length * 44)}>
-              <BarChart data={stats.deptData} layout="vertical" margin={{ left: 8, right: 24 }}>
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={100}
-                  tick={{ fill: '#8888A0', fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: '#1E1E2E55' }}
-                  contentStyle={{
-                    background: '#12121A',
-                    border: '1px solid #1E1E2E',
-                    borderRadius: 8,
-                    color: '#E8E8ED',
-                    fontSize: 12,
-                  }}
-                />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={18}>
-                  {stats.deptData.map((_, i) => (
-                    <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <ul className="space-y-3">
+              {stats.deptData.map((d, i) => {
+                const max = stats.deptData[0].count || 1
+                return (
+                  <li key={d.name} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-[13px] text-text-dim truncate" title={d.name}>
+                      {d.name}
+                    </span>
+                    <span className="flex-1 h-2.5 rounded-full bg-surface-2 overflow-hidden">
+                      <span
+                        className="block h-full rounded-full transition-all"
+                        style={{
+                          width: `${(d.count / max) * 100}%`,
+                          background: DEPT_COLORS[i % DEPT_COLORS.length],
+                        }}
+                      />
+                    </span>
+                    <span className="w-6 shrink-0 text-right text-[13px] text-text tabular-nums">
+                      {d.count}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </section>
 
@@ -311,7 +304,7 @@ export default function Dashboard() {
         <EmptyState
           icon={Inbox}
           title="Welcome to Cortex"
-          message="Connect your first data source — Slack, GitHub, or Discord — and Cortex will extract your team's tribal knowledge into executable skills."
+          message="Connect your first data source (Slack, GitHub, or Discord) and Cortex will extract your team's tribal knowledge into executable skills."
           action={
             <Link to="/sources">
               <Button variant="primary">Connect a data source <ArrowRight size={14} /></Button>

@@ -9,12 +9,34 @@ from backend.schemas import DocumentCreate, DocumentResponse
 router = APIRouter()
 
 
+async def _find_existing(
+    db: AsyncSession, source_type: str, source_id: str
+) -> Document | None:
+    """Return the already-ingested document for (source_type, source_id),
+    if any — used to keep document ingestion idempotent."""
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.source_type == source_type,
+            Document.source_id == source_id,
+        )
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
 @router.post("/documents", response_model=DocumentResponse, status_code=201)
 async def create_document(
     payload: DocumentCreate,
     db: AsyncSession = Depends(get_db),
 ) -> DocumentResponse:
-    """Ingest a single document and optionally trigger background processing."""
+    """Ingest a single document (idempotent: re-posting the same
+    source_type + source_id returns the existing document instead of
+    creating a duplicate)."""
+    existing = await _find_existing(db, payload.source_type, payload.source_id)
+    if existing is not None:
+        return DocumentResponse.model_validate(existing)
+
     doc = Document(
         content=payload.content,
         source_type=payload.source_type,
@@ -39,10 +61,22 @@ async def create_documents_batch(
     payloads: list[DocumentCreate],
     db: AsyncSession = Depends(get_db),
 ) -> list[DocumentResponse]:
-    """Ingest a batch of documents."""
+    """Ingest a batch of documents. Duplicates (same source_type +
+    source_id, whether already in the database or repeated within the
+    batch) are not re-created; the existing document is returned in
+    their place, so the response stays 1:1 with the request."""
     results: list[DocumentResponse] = []
+    seen_in_batch: dict[tuple[str, str], Document] = {}
 
     for payload in payloads:
+        key = (payload.source_type, payload.source_id)
+        existing = seen_in_batch.get(key) or await _find_existing(
+            db, payload.source_type, payload.source_id
+        )
+        if existing is not None:
+            results.append(DocumentResponse.model_validate(existing))
+            continue
+
         doc = Document(
             content=payload.content,
             source_type=payload.source_type,
@@ -58,6 +92,7 @@ async def create_documents_batch(
         db.add(doc)
         await db.flush()
         await db.refresh(doc)
+        seen_in_batch[key] = doc
 
         results.append(DocumentResponse.model_validate(doc))
 

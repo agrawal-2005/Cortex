@@ -172,7 +172,7 @@ export default function ReviewQueue() {
       <header>
         <h1 className="text-2xl font-bold text-text">Review Queue</h1>
         <p className="text-sm text-text-dim mt-1">
-          Lowest-confidence skills first — these need the most attention.
+          Lowest-confidence skills first. These need the most attention.
         </p>
       </header>
 

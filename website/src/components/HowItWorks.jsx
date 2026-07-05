@@ -311,7 +311,7 @@ const STEPS = [
   {
     title: 'Connect your tools',
     text: 'Connect Slack, GitHub, Discord, or upload files. Cortex reads public channels, PRs, issues, and docs.',
-    note: 'Connect once. Cortex syncs automatically — new messages, PRs, and tickets flow in continuously. Your knowledge never goes stale.',
+    note: 'Connect once. Cortex syncs automatically: new messages, PRs, and tickets flow in continuously. Your knowledge never goes stale.',
     Visual: ConnectVisual,
   },
   {
@@ -321,7 +321,7 @@ const STEPS = [
   },
   {
     title: 'Skills are structured',
-    text: 'Each workflow becomes a structured skill — with steps, tools, edge cases, and links back to every source.',
+    text: 'Each workflow becomes a structured skill, with steps, tools, edge cases, and links back to every source.',
     Visual: StructureVisual,
   },
   {

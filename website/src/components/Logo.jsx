@@ -1,5 +1,5 @@
 /**
- * Cortex logo mark — circuit pathways converging into a center point.
+ * Cortex logo mark - circuit pathways converging into a center point.
  * Purple (#6C5CE7) = the brain, cyan (#00D2FF) = the connections.
  */
 export default function Logo({ size = 32, className = '' }) {

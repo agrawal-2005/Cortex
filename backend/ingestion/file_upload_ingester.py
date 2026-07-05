@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.knowledge.models import Document
@@ -62,22 +63,52 @@ class FileUploadIngester:
         source_type: str,
         db: AsyncSession,
     ) -> dict[str, Any]:
-        """Process a list of record dicts into Documents with embeddings."""
+        """Process a list of record dicts into Documents with embeddings.
+
+        Skips records whose (source_type, source_id) already exists — the
+        default positional source_id ("{source_type}-{idx}") is stable
+        across uploads, so re-uploading the same file is idempotent
+        instead of duplicating every document.
+        """
         created_docs: list[Document] = []
         skipped = 0
+        skipped_existing = 0
         errors: list[str] = []
 
+        # Normalize rows first so we can dedup-check in one query.
+        rows: list[tuple[str, str, dict]] = []  # (content, source_id, record)
         for idx, record in enumerate(records):
             content = (record.get("content") or "").strip()
             if not content:
                 errors.append(f"Row {idx + 1}: missing 'content' field")
                 skipped += 1
                 continue
+            source_id = (
+                (record.get("source_id") or f"{source_type}-{idx}").strip()
+                or f"{source_type}-{idx}"
+            )
+            rows.append((content, source_id, record))
+
+        existing: set[str] = set()
+        if rows:
+            result = await db.execute(
+                select(Document.source_id).where(
+                    Document.source_type == source_type,
+                    Document.source_id.in_({sid for _, sid, _ in rows}),
+                )
+            )
+            existing = set(result.scalars().all())
+
+        for content, source_id, record in rows:
+            if source_id in existing:
+                skipped_existing += 1
+                continue
+            existing.add(source_id)  # also dedup within this upload
 
             doc = Document(
                 content=content,
                 source_type=source_type,
-                source_id=record.get("source_id", f"{source_type}-{idx}").strip() or f"{source_type}-{idx}",
+                source_id=source_id,
                 source_link=record.get("source_link") or None,
                 source_label=record.get("source_label") or None,
                 channel_or_project=record.get("channel_or_project") or None,
@@ -101,5 +132,6 @@ class FileUploadIngester:
             "status": "success",
             "documents_created": len(created_docs),
             "skipped": skipped,
+            "skipped_existing": skipped_existing,
             "errors": errors,
         }

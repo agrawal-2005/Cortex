@@ -9,10 +9,13 @@ Cortex extracts tribal knowledge from company tools (Slack, GitHub, Discord, Jir
 file uploads), synthesizes it into structured executable workflows called **skills**,
 and serves them via API so AI agents can execute company processes.
 
-## Key Message (hero — use verbatim)
+## Key Message (hero — use verbatim, updated 2026-07-05)
 
-> Extract how your company actually works.
-> Turn it into workflows AI agents can run.
+> The AI that knows how your company actually works.
+
+Subheading:
+
+> Cortex turns your team's knowledge into workflows your agents can run.
 
 Never pair the name with a tagline (no "Cortex — Company Brain"). The wordmark is
 just lowercase "cortex".

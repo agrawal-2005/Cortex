@@ -7,6 +7,7 @@ import Features from './components/Features'
 import SyncLoop from './components/SyncLoop'
 import Integrations from './components/Integrations'
 import Comparison from './components/Comparison'
+import Security from './components/Security'
 import Stats from './components/Stats'
 import CTA from './components/CTA'
 import Footer from './components/Footer'
@@ -24,6 +25,7 @@ export default function App() {
         <SyncLoop />
         <Integrations />
         <Comparison />
+        <Security />
         <Stats />
         {/* Pricing lands on the early-access CTA until plans exist */}
         <div id="pricing" className="scroll-mt-16" />

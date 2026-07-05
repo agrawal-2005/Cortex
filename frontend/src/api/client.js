@@ -70,6 +70,15 @@ export function getDocumentSourceTypes() {
   return v1.get('/ingest/documents/source-types')
 }
 
+export function getDataOverview() {
+  return api.get('/data-overview/')
+}
+
+// Irreversible: hard-deletes all documents, skills, vectors, and sources.
+export function deleteWorkspaceData() {
+  return api.delete('/workspace/data', { data: { confirm: 'DELETE' } })
+}
+
 // ── Ingestion ───────────────────────────────────────────────────────────────
 
 export function uploadSlackExport(file) {
@@ -140,7 +149,7 @@ const v1Processing = withAuth(axios.create({ baseURL: '/api/v1/processing' }))
 
 // Cluster everything, pre-extract only the top clusters; the rest become
 // pending topics answered on demand at query time. Runs automatically
-// after ingestion — this is the manual trigger.
+// after ingestion - this is the manual trigger.
 export function runLazyExtraction() {
   return v1Processing.post('/lazy-extract')
 }

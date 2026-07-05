@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Copy, Check, AlertTriangle, ShieldAlert, ListChecks,
-  ExternalLink, FileJson, BookOpen, Users,
+  ExternalLink, FileJson, BookOpen, Users, Wrench, Zap, Repeat,
+  Bot, KeyRound, GitBranch, UserCheck,
 } from 'lucide-react'
 import { getSkill, getExecutableSkill } from '../api/client'
 import {
@@ -66,8 +67,33 @@ function SourceRef({ source }) {
 
 // ── Step (timeline entry) ─────────────────────────────────────────────
 
+function OnFailure({ onFailure }) {
+  // Normalize: string | {if, then} | [{if, then}, ...]
+  const rules = (Array.isArray(onFailure) ? onFailure : [onFailure])
+    .map((r) => (typeof r === 'string' ? { then: r } : r))
+    .filter((r) => r && (r.if || r.then))
+  if (rules.length === 0) return null
+  return (
+    <div className="rounded-lg border border-warning/25 bg-warning/[0.06] px-3 py-2.5 space-y-1.5">
+      {rules.map((r, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <ShieldAlert size={14} className="text-warning shrink-0 mt-0.5" />
+          <p className="text-xs text-text-dim leading-relaxed">
+            <span className="font-medium text-warning">
+              {r.if ? `If ${r.if}:` : 'On failure:'}
+            </span>{' '}
+            {r.then}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Step({ step, isLast }) {
   const details = step.details || {}
+  const tool = details.tool
+  const inputs = details.inputs_required || []
   return (
     <li className="relative pl-12 pb-8">
       {!isLast && (
@@ -81,15 +107,42 @@ function Step({ step, isLast }) {
         {details.explanation && (
           <p className="text-sm text-text-dim leading-relaxed">{details.explanation}</p>
         )}
-        {details.expected_output && (
-          <p className="text-xs text-text-dim">
-            <span className="font-medium text-text">Expected output:</span> {details.expected_output}
-          </p>
+        {tool?.name && (
+          <div className="flex items-start gap-2.5 bg-bg border border-border rounded-lg px-3 py-2.5">
+            <Wrench size={14} className="text-secondary shrink-0 mt-0.5" />
+            <div className="min-w-0 text-xs space-y-0.5">
+              <p className="text-text">
+                <span className="font-semibold">{tool.name}</span>
+                {tool.method && <span className="text-text-dim"> · {tool.method}</span>}
+              </p>
+              {tool.auth_required && (
+                <p className="text-text-dim flex items-center gap-1">
+                  <KeyRound size={11} /> Requires {tool.auth_required}
+                </p>
+              )}
+            </div>
+          </div>
         )}
         {Array.isArray(details.tools) && details.tools.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {details.tools.map((t) => <ToolBadge key={t}>{t}</ToolBadge>)}
           </div>
+        )}
+        {inputs.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap text-xs text-text-dim">
+            <span className="font-medium text-text">Inputs:</span>
+            {inputs.map((inp) => <ToolBadge key={inp}>{inp}</ToolBadge>)}
+          </div>
+        )}
+        {details.expected_output && (
+          <p className="text-xs text-text-dim">
+            <span className="font-medium text-text">Expected output:</span> {details.expected_output}
+          </p>
+        )}
+        {details.success_criteria && (
+          <p className="text-xs text-text-dim">
+            <span className="font-medium text-text">Success when:</span> {details.success_criteria}
+          </p>
         )}
         <ConfidenceBar value={step.confidence} className="max-w-56" />
         {step.sources?.length > 0 && (
@@ -100,17 +153,7 @@ function Step({ step, isLast }) {
             {step.sources.map((s, i) => <SourceRef key={i} source={s} />)}
           </div>
         )}
-        {details.on_failure && (
-          <div className="flex items-start gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-3 py-2.5">
-            <ShieldAlert size={14} className="text-warning shrink-0 mt-0.5" />
-            <p className="text-xs text-text-dim">
-              <span className="font-medium text-warning">If this fails:</span>{' '}
-              {typeof details.on_failure === 'string'
-                ? details.on_failure
-                : JSON.stringify(details.on_failure)}
-            </p>
-          </div>
-        )}
+        {details.on_failure && <OnFailure onFailure={details.on_failure} />}
       </div>
     </li>
   )
@@ -177,6 +220,8 @@ export default function SkillDetail() {
   }
 
   const steps = [...(skill.steps || [])].sort((a, b) => a.step_order - b.step_order)
+  const readiness = skill.automation_readiness || {}
+  const inputEntries = Object.entries(skill.inputs_schema || {})
 
   return (
     <div className="space-y-6">
@@ -193,6 +238,21 @@ export default function SkillDetail() {
           </div>
         </div>
         <p className="text-sm text-text-dim max-w-3xl leading-relaxed">{skill.description}</p>
+        <div className="flex items-center gap-2 flex-wrap text-xs text-text-dim">
+          {skill.trigger?.type && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border border-border bg-surface">
+              <Zap size={11} className="text-warning" />
+              <span className="capitalize font-medium text-text">{skill.trigger.type}</span>
+              {skill.trigger.condition && <span>· {skill.trigger.condition}</span>}
+            </span>
+          )}
+          {skill.is_repeatable != null && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border border-border bg-surface">
+              <Repeat size={11} className={skill.is_repeatable ? 'text-success' : 'text-text-dim'} />
+              {skill.is_repeatable ? 'Repeatable' : 'Not repeatable'}
+            </span>
+          )}
+        </div>
         <div className="max-w-72">
           <ConfidenceBar value={skill.confidence} />
         </div>
@@ -218,20 +278,103 @@ export default function SkillDetail() {
 
       {tab === 'readable' ? (
         <div className="space-y-8">
-          {/* Prerequisites */}
-          {skill.prerequisites?.length > 0 && (
+          {/* Automation readiness */}
+          {readiness?.level && (
+            <section className="card p-5 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="text-sm font-semibold text-text flex items-center gap-2">
+                  <Bot size={15} className="text-primary" /> Automation Readiness
+                </h2>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border capitalize ${
+                  readiness.safe_to_automate
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : 'border-warning/30 bg-warning/10 text-warning'
+                }`}>
+                  {readiness.level}{readiness.safe_to_automate ? ' · safe to automate' : ' · human in the loop'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {readiness.missing_for_automation?.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <GitBranch size={11} /> Missing for full automation
+                    </p>
+                    <ul className="space-y-1">
+                      {readiness.missing_for_automation.map((m, i) => (
+                        <li key={i} className="text-xs text-text-dim flex gap-2">
+                          <span className="text-warning">•</span> {m}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {readiness.requires_human_review?.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <UserCheck size={11} /> Requires human review
+                    </p>
+                    <ul className="space-y-1">
+                      {readiness.requires_human_review.map((r, i) => (
+                        <li key={i} className="text-xs text-text-dim flex gap-2">
+                          <span className="text-secondary">•</span> {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Inputs */}
+          {inputEntries.length > 0 && (
             <section className="card p-5">
               <h2 className="text-sm font-semibold text-text flex items-center gap-2 mb-3">
-                <ListChecks size={15} className="text-secondary" /> Prerequisites
+                <KeyRound size={15} className="text-secondary" /> Inputs
               </h2>
-              <ul className="space-y-1.5">
-                {skill.prerequisites.map((p, i) => (
-                  <li key={i} className="text-sm text-text-dim flex gap-2">
-                    <span className="text-secondary">•</span> {typeof p === 'string' ? p : JSON.stringify(p)}
-                  </li>
+              <dl className="space-y-2">
+                {inputEntries.map(([key, desc]) => (
+                  <div key={key} className="flex items-baseline gap-3">
+                    <dt><ToolBadge>{key}</ToolBadge></dt>
+                    <dd className="text-sm text-text-dim">{desc}</dd>
+                  </div>
                 ))}
-              </ul>
+              </dl>
             </section>
+          )}
+
+          {/* Prerequisites & Conditions */}
+          {(skill.prerequisites?.length > 0 || skill.conditions?.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {skill.prerequisites?.length > 0 && (
+                <section className="card p-5">
+                  <h2 className="text-sm font-semibold text-text flex items-center gap-2 mb-3">
+                    <ListChecks size={15} className="text-secondary" /> Prerequisites
+                  </h2>
+                  <ul className="space-y-1.5">
+                    {skill.prerequisites.map((p, i) => (
+                      <li key={i} className="text-sm text-text-dim flex gap-2">
+                        <span className="text-secondary">•</span> {typeof p === 'string' ? p : JSON.stringify(p)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {skill.conditions?.length > 0 && (
+                <section className="card p-5">
+                  <h2 className="text-sm font-semibold text-text flex items-center gap-2 mb-3">
+                    <GitBranch size={15} className="text-primary" /> Applies When
+                  </h2>
+                  <ul className="space-y-1.5">
+                    {skill.conditions.map((c, i) => (
+                      <li key={i} className="text-sm text-text-dim flex gap-2">
+                        <span className="text-primary">•</span> {typeof c === 'string' ? c : JSON.stringify(c)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
           )}
 
           {/* Roles */}
@@ -276,7 +419,7 @@ export default function SkillDetail() {
         <section className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface-2">
             <p className="text-xs text-text-dim font-mono">
-              GET /api/skills/{id}/executable — consumed by AI agents
+              GET /api/skills/{id}/executable · consumed by AI agents
             </p>
             <button
               onClick={copyJson}

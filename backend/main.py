@@ -19,6 +19,8 @@ from backend.api.routes_skills import router as routes_skills_router
 from backend.api.routes_query import router as routes_query_router
 from backend.api.routes_feedback import router as routes_feedback_router
 from backend.api.routes_sources import router as routes_sources_router
+from backend.api.routes_data_overview import router as routes_data_overview_router
+from backend.api.routes_workspace import router as routes_workspace_router
 
 
 @asynccontextmanager
@@ -66,6 +68,8 @@ app.include_router(routes_skills_router, prefix="/api/skills", tags=["skills-v2"
 app.include_router(routes_query_router, prefix="/api/query", tags=["query"], dependencies=_auth_query)
 app.include_router(routes_feedback_router, prefix="/api/feedback", tags=["feedback-v2"], dependencies=_auth)
 app.include_router(routes_sources_router, prefix="/api/sources", tags=["sources"], dependencies=_auth)
+app.include_router(routes_data_overview_router, prefix="/api/data-overview", tags=["data-overview"], dependencies=_auth)
+app.include_router(routes_workspace_router, prefix="/api/workspace", tags=["workspace"], dependencies=_auth)
 
 
 @app.get("/health", response_model=HealthResponse)

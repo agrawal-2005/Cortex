@@ -1,5 +1,5 @@
 /**
- * Cortex wordmark — lowercase "cortex", Inter 500, tight tracking,
+ * Cortex wordmark - lowercase "cortex", Inter 500, tight tracking,
  * final "x" in brand purple. Never "Cortex" or "CORTEX" in lockups.
  */
 export default function Wordmark({ size = 24, className = '' }) {

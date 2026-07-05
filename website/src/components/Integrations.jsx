@@ -10,7 +10,7 @@ function BrandIcon({ path, color, size = 26 }) {
   )
 }
 
-/* Official Slack mark — removed from simple-icons, inlined with its four brand colors. */
+/* Official Slack mark - removed from simple-icons, inlined with its four brand colors. */
 function SlackIcon({ size = 26 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
@@ -47,7 +47,7 @@ function GmailIcon({ size = 26 }) {
   )
 }
 
-/* Microsoft Teams isn't in simple-icons — flat rendition of the official mark. */
+/* Microsoft Teams isn't in simple-icons - flat rendition of the official mark. */
 function TeamsIcon({ size = 26 }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
@@ -200,7 +200,7 @@ export default function Integrations() {
 
         <Reveal delay={0.1}>
           <p className="mt-8 sm:mt-2 text-sm text-text-dim text-center">
-            Don't see your tool? Cortex connects to almost anything — no custom setup
+            Don't see your tool? Cortex connects to almost anything, no custom setup
             needed.
           </p>
         </Reveal>

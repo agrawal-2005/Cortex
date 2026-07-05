@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import Logo from './Logo'
 import Wordmark from './Wordmark'
 
+// Product dashboard (separate Vite app in ../frontend). Overridable per env.
+const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3000'
+
 const LINKS = [
   { href: '#how-it-works', label: 'How It Works' },
   { href: '#features', label: 'Features' },
@@ -45,12 +48,20 @@ export default function Navbar() {
           ))}
         </div>
 
-        <a
-          href="#cta"
-          className="text-sm font-medium bg-primary hover:bg-primary/85 text-white rounded-lg px-4 py-2 transition-colors"
-        >
-          Get Early Access
-        </a>
+        <div className="flex items-center gap-4">
+          <a
+            href={APP_URL}
+            className="hidden sm:inline text-sm text-text-dim hover:text-text transition-colors"
+          >
+            Open App
+          </a>
+          <a
+            href="#cta"
+            className="text-sm font-medium bg-primary hover:bg-primary/85 text-white rounded-lg px-4 py-2 transition-colors"
+          >
+            Get Early Access
+          </a>
+        </div>
       </div>
     </nav>
   )

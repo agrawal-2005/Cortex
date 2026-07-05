@@ -7,6 +7,7 @@ import Skills from './pages/Skills'
 import SkillDetail from './pages/SkillDetail'
 import ReviewQueue from './pages/ReviewQueue'
 import Query from './pages/Query'
+import DataOverview from './pages/DataOverview'
 import Settings from './pages/Settings'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
               <Route path="/skills/:id" element={<SkillDetail />} />
               <Route path="/review" element={<ReviewQueue />} />
               <Route path="/sources" element={<Sources />} />
+              <Route path="/data-overview" element={<DataOverview />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </div>

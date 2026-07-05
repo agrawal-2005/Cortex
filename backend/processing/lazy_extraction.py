@@ -220,14 +220,24 @@ class LazyExtractionService:
         db: AsyncSession,
         doc_relevance: dict[str, float],
         topic_hint: str,
+        beat_relevance: float = 0.0,
     ) -> Skill | None:
-        """Extract a skill live for documents that matched no skill.
+        """Extract a skill live for documents that matched no skill — or
+        matched an existing skill only weakly.
 
-        1. If the documents belong to a pending cluster, extract that ONE
-           cluster, cache it (status → "extracted"), and return the skill.
-        2. If they belong to no cluster, extract ad hoc from the matched
-           documents — unless they were already evaluated before (never
-           re-extract).
+        ``beat_relevance`` is the best document relevance the query route
+        found for an already-existing skill (0.0 when no skill matched).
+        A pending cluster is only extracted when it owns a STRICTLY more
+        relevant document — an existing skill with an incidental one-doc
+        overlap must not shadow the pending topic the question is
+        actually about, but ties keep the existing skill (no LLM spend).
+
+        1. If the documents belong to a pending cluster that beats
+           ``beat_relevance``, extract that ONE cluster, cache it
+           (status → "extracted"), and return the skill.
+        2. If they belong to no cluster AND no skill matched at all,
+           extract ad hoc from the matched documents — unless they were
+           already evaluated before (never re-extract).
         3. Returns None when nothing was extracted or the cluster was
            judged not repeatable.
         """
@@ -245,15 +255,27 @@ class LazyExtractionService:
             )
             return None
         async with _extraction_lock:
-            cluster = await self._best_pending_cluster(db, doc_relevance)
+            cluster = await self._best_pending_cluster(
+                db, doc_relevance, min_relevance=beat_relevance
+            )
             if cluster is not None:
                 return await self._extract_pending(db, cluster)
+            if beat_relevance > 0.0:
+                # An existing skill matched and no pending cluster beats
+                # it — never burn an ad-hoc extraction on its documents.
+                return None
             return await self._extract_loose(db, doc_relevance, topic_hint)
 
     async def _best_pending_cluster(
-        self, db: AsyncSession, doc_relevance: dict[str, float]
+        self,
+        db: AsyncSession,
+        doc_relevance: dict[str, float],
+        min_relevance: float = 0.0,
     ) -> PendingCluster | None:
         """The pending cluster best matching the relevant documents.
+
+        Clusters whose best-matching document is not strictly more
+        relevant than ``min_relevance`` are ignored.
 
         Pending clusters are few (dozens at most), so overlap is computed
         in Python rather than with JSON-array SQL that would differ
@@ -272,7 +294,7 @@ class LazyExtractionService:
                 for did in candidate.document_ids or []
                 if did in doc_relevance
             ]
-            if not overlap:
+            if not overlap or max(overlap) <= min_relevance:
                 continue
             key = (max(overlap), sum(overlap))
             if key > best_key:

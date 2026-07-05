@@ -1,43 +1,45 @@
 import Reveal from './Reveal'
+import SkillShowcase from './SkillShowcase'
+import { DashboardMock, SourcesMock, QueryMock, ReviewMock, DataOverviewMock } from './AppMockups'
 
+/* All demo frames are live mockups rendered from static data - no screenshots. */
 const SHOTS = [
   {
     title: 'Dashboard',
-    caption: 'Stats at a glance — documents ingested, skills extracted, review queue, confidence distribution.',
+    caption:
+      'Stats at a glance: documents ingested, skills extracted, review queue, confidence distribution.',
+    component: DashboardMock,
   },
   {
     title: 'Data Sources',
-    caption: 'App grid with live connection status. Connect Slack, GitHub, Discord, or upload files.',
+    caption:
+      'App grid with live connection status. Connect Slack, GitHub, Discord, or upload files.',
+    component: SourcesMock,
   },
   {
     title: 'Skill Detail',
-    caption: 'Every step with tools, edge cases, and links back to the exact source message or PR.',
+    caption:
+      'Every step with tools, edge cases, and links back to the exact source message or PR. This is real output: scroll inside the frame, or flip to Raw JSON.',
+    component: SkillShowcase,
   },
   {
     title: 'Query',
-    caption: 'Ask in natural language — Cortex matches the best skill and cites its sources.',
+    caption:
+      'Ask in natural language. Cortex matches the best skill and cites its sources. Chats are stored, and follow-ups stay on topic.',
+    component: QueryMock,
   },
   {
     title: 'Review Queue',
     caption: 'Domain experts approve, edit, or reject. Corrections feed back into extraction.',
+    component: ReviewMock,
+  },
+  {
+    title: 'Your Data',
+    caption:
+      'Full transparency: every document Cortex has ingested, per source, with date ranges, sample content, and the skills extracted from it. Nothing beyond this is accessed.',
+    component: DataOverviewMock,
   },
 ]
-
-function BrowserFrame({ title }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface overflow-hidden">
-      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-border">
-        <span className="w-2.5 h-2.5 rounded-full bg-border" />
-        <span className="w-2.5 h-2.5 rounded-full bg-border" />
-        <span className="w-2.5 h-2.5 rounded-full bg-border" />
-        <span className="ml-3 text-[11px] text-text-dim">{title}</span>
-      </div>
-      <div className="aspect-[1200/750] flex items-center justify-center bg-bg/60">
-        <p className="text-sm text-text-dim">Placeholder — replace with real screenshots</p>
-      </div>
-    </div>
-  )
-}
 
 export default function Demo() {
   return (
@@ -58,11 +60,11 @@ export default function Demo() {
                 }`}
               >
                 <div className="[direction:ltr]">
-                  <BrowserFrame title={shot.title} />
+                  <shot.component />
                 </div>
                 <div className="[direction:ltr]">
-                  <h3 className="text-base font-semibold">{shot.title}</h3>
-                  <p className="mt-2 text-sm text-text-dim leading-relaxed">{shot.caption}</p>
+                  <h3 className="text-xl sm:text-2xl font-semibold">{shot.title}</h3>
+                  <p className="mt-3 text-base text-text-dim leading-relaxed">{shot.caption}</p>
                 </div>
               </div>
             </Reveal>

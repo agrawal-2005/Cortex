@@ -33,14 +33,14 @@ export function pct(value) {
 }
 
 export function formatDate(value) {
-  if (!value) return '—'
+  if (!value) return '-'
   const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return '-'
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // Map Document.source_type values to integration keys (single source of
-// truth — used by both the Dashboard stat and the Data Sources page so the
+// truth - used by both the Dashboard stat and the Data Sources page so the
 // two never disagree about what is "connected"). Generic rule: the key is
 // the prefix before the first "_" (github_pr → github), so any newly
 // ingested source type shows up without code changes. Aliases cover
@@ -53,7 +53,7 @@ export function sourceKeyOf(sourceType) {
 }
 
 export function timeAgo(value) {
-  if (!value) return '—'
+  if (!value) return '-'
   const d = new Date(value)
   const seconds = Math.floor((Date.now() - d.getTime()) / 1000)
   if (seconds < 60) return 'just now'

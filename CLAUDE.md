@@ -59,6 +59,28 @@ read. Target: YC application, Fall 2026/Winter 2027.
   this check — this is how we got a 240→834 document duplication bug
   once already.
 
+## Data Trust Features (never remove or weaken)
+- Tenancy: Cortex is currently SINGLE-TENANT BY DESIGN — no
+  organization_id/workspace_id exists on any model, and all query
+  paths (vector search, clustering, skill matching, lazy extraction)
+  operate on one global pool. This is fine for one pilot at a time
+  and NOT safe for a second company (audited 2026-07-05: cross-company
+  data would be fused into the same skills at extraction time). Before
+  onboarding a second company: either one deployment per pilot
+  (separate DB + CHROMA_PERSIST_DIR) or real org_id scoping on every
+  model and query path.
+- The "delete all workspace data" cascade (DELETE /api/workspace/data,
+  backend/api/routes_workspace.py) must remain complete — any NEW
+  table storing customer data must be added to _DELETION_ORDER when
+  created, and any new vector collection must be cleared too. It is a
+  hard delete with post-deletion verification (fails loudly if
+  anything remains); never soften it to a soft-delete. API keys are
+  deliberately kept.
+- The transparency page (/data-overview) must stay accurate — if new
+  document/skill fields or data stores are added, consider whether
+  they belong on this page. It backs the claim "this is everything
+  Cortex has processed from your uploads."
+
 ## Lazy Extraction (current architecture)
 - On ingestion: cluster everything (cheap), pre-extract only top
   PRE_EXTRACT_TOP_N clusters (default 6) for the dashboard

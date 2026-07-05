@@ -117,6 +117,26 @@ class VectorStore:
         collection.delete(ids=[skill_id])
         logger.info("Deleted skill '%s' from vector store", skill_id)
 
+    def clear(self) -> int:
+        """Hard-delete every vector in the collection.
+
+        Deletes by id in batches (ChromaDB has no "delete all" call) and
+        keeps the collection itself alive so cached handles held by other
+        VectorStore instances stay valid. Returns the number deleted.
+        """
+        collection = self._get_collection()
+        deleted = 0
+        while True:
+            ids = collection.get(limit=500, include=[])["ids"]
+            if not ids:
+                break
+            collection.delete(ids=ids)
+            deleted += len(ids)
+        logger.warning(
+            "Cleared %d vectors from collection '%s'", deleted, self.collection_name
+        )
+        return deleted
+
     def get_collection_stats(self) -> dict[str, Any]:
         """Return collection statistics.
 

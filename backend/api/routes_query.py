@@ -114,18 +114,27 @@ async def query_knowledge(
 
     # 4. Map the matched documents back to the skill extracted from
     #    their cluster (skill_documents), falling back to LLM citations.
-    skill = await _find_best_skill(db, doc_relevance, query_embedding)
+    skill, skill_top_relevance = await _find_best_skill(
+        db, doc_relevance, query_embedding
+    )
 
-    # 4b. Lazy extraction: no skill exists yet for these documents. If
-    #     they belong to a pending cluster, extract that ONE cluster live
-    #     and cache it; if they belong to no cluster, extract ad hoc from
-    #     the matched documents. Either way the result is persisted, so
-    #     the next identical query resolves via skill_documents with no
-    #     LLM call.
-    if skill is None:
-        skill = await LazyExtractionService().extract_on_demand(
-            db, doc_relevance, topic_hint=question
-        )
+    # 4b. Lazy extraction. If a pending cluster owns a strictly MORE
+    #     relevant document than the best existing skill does, the
+    #     question is about that pending topic — extract it live and
+    #     cache it (an existing skill with one incidental overlapping
+    #     doc must not shadow it). With no skill at all, docs in no
+    #     cluster are extracted ad hoc. Either way the result is
+    #     persisted, so the next identical query resolves via
+    #     skill_documents with no LLM call. On failure/deferral the
+    #     existing skill (if any) is still returned.
+    extracted = await LazyExtractionService().extract_on_demand(
+        db,
+        doc_relevance,
+        topic_hint=question,
+        beat_relevance=skill_top_relevance,
+    )
+    if extracted is not None:
+        skill = extracted
 
     if skill is None:
         matched = await _matched_documents(db, doc_relevance)
@@ -197,8 +206,13 @@ async def _find_best_skill(
     db: AsyncSession,
     doc_relevance: dict[str, float],
     query_embedding: list[float],
-) -> Skill | None:
+) -> tuple[Skill | None, float]:
     """Find the skill whose source documents best match the given hits.
+
+    Returns ``(skill, top_relevance)`` where ``top_relevance`` is the
+    highest-relevance matched document the winning skill owns (0.0 when
+    no skill matched) — the query route compares it against pending
+    clusters to decide whether to extract on demand instead.
 
     Candidate skills come from BOTH provenance tables, merged into one
     pool before ranking:
@@ -222,7 +236,7 @@ async def _find_best_skill(
     then confidence.
     """
     if not doc_relevance:
-        return None
+        return None, 0.0
 
     doc_ids = list(doc_relevance)
 
@@ -243,7 +257,7 @@ async def _find_best_skill(
     pairs.update((skill_id, doc_id) for skill_id, doc_id in result.all())
 
     if not pairs:
-        return None
+        return None, 0.0
 
     max_rel: dict[str, float] = {}
     sum_rel: dict[str, float] = {}
@@ -263,7 +277,7 @@ async def _find_best_skill(
     )
     skills = result.scalars().all()
     if not skills:
-        return None
+        return None, 0.0
 
     skill_embeddings = _embedding_service.generate_embeddings(
         [f"{s.name}. {s.description or ''}" for s in skills]
@@ -273,7 +287,7 @@ async def _find_best_skill(
         for s, emb in zip(skills, skill_embeddings)
     }
 
-    return max(
+    best = max(
         skills,
         key=lambda s: (
             0.5 * sim.get(s.id, 0.0) + 0.5 * max_rel.get(s.id, 0.0),
@@ -281,3 +295,4 @@ async def _find_best_skill(
             s.confidence,
         ),
     )
+    return best, max_rel.get(best.id, 0.0)

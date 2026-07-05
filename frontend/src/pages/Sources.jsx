@@ -171,7 +171,7 @@ function SlackModal({ open, onClose, onIngest }) {
             variant="primary"
             className="w-full"
             disabled={!token}
-            onClick={() => toast('Live Slack sync is coming soon — upload an export .zip for now.', 'info')}
+            onClick={() => toast('Live Slack sync is coming soon. Upload an export .zip for now.', 'info')}
           >
             Connect
           </Button>
@@ -197,7 +197,7 @@ function GitHubModal({ open, onClose, onIngest }) {
           <label className="text-xs font-medium text-text-dim block mb-1.5">Repository</label>
           <input
             className="input-dark font-mono"
-            placeholder="owner/repo — e.g. usestrix/strix"
+            placeholder="owner/repo, e.g. usestrix/strix"
             value={repo}
             onChange={(e) => setRepo(e.target.value)}
           />
@@ -387,11 +387,11 @@ export default function Sources() {
 
   // After ingestion: refresh badges and report the lazy-extraction result
   // (the backend clusters everything and pre-extracts only the top
-  // clusters during the ingest request — no extra calls needed here).
+  // clusters during the ingest request - no extra calls needed here).
   const finishIngest = useCallback(async (label, count, stats, extraction) => {
     if (stats?.rate_limited) {
       toast(
-        'Rate limit hit — this was a partial sync. Add an access token and sync again to fetch everything.',
+        'Rate limit hit: this was a partial sync. Add an access token and sync again to fetch everything.',
         'warning',
         8000,
       )
@@ -416,14 +416,14 @@ export default function Sources() {
         const stage = t.progress?.stage
         setProgress({
           stage: 'ingesting',
-          label: `Ingesting documents from ${label}${stage ? ` — ${stage}` : ''}… (safe to leave this page)`,
+          label: `Ingesting documents from ${label}${stage ? ` · ${stage}` : ''}… (safe to leave this page)`,
         })
       })
     } catch (e) {
       localStorage.removeItem(ACTIVE_INGEST_KEY)
       setProgress(null)
       if (e.response?.status === 404) {
-        toast('The backend was restarted — that sync is no longer tracked. Please sync again.', 'warning', 7000)
+        toast('The backend was restarted, so that sync is no longer tracked. Please sync again.', 'warning', 7000)
       } else {
         toast(`Lost track of the ${label} sync: ${e.message}`, 'error', 7000)
       }
@@ -496,7 +496,7 @@ export default function Sources() {
     const connected = INTEGRATIONS.filter((i) => connectedKeys.has(i.key))
     const available = INTEGRATIONS.filter((i) => !connectedKeys.has(i.key))
     // Source types ingested via the API that don't match a catalog entry
-    // still get a card — connected state is driven by the data, not this list.
+    // still get a card - connected state is driven by the data, not this list.
     const knownKeys = new Set(INTEGRATIONS.map((i) => i.key))
     for (const key of [...connectedKeys].sort()) {
       if (!knownKeys.has(key)) {
@@ -511,7 +511,7 @@ export default function Sources() {
     return { connected, available }
   }, [connectedKeys])
 
-  // Unknown (dynamic) sources have no dedicated modal — offer file upload.
+  // Unknown (dynamic) sources have no dedicated modal - offer file upload.
   const openModal = useCallback((key) => {
     const hasModal = ['slack', 'github', 'discord', 'jira', 'confluence', 'file', 'api'].includes(key)
     setActiveModal(hasModal ? key : 'file')
@@ -571,7 +571,7 @@ export default function Sources() {
         open={activeModal === 'jira'}
         onClose={() => setActiveModal(null)}
         onIngest={runIngest}
-        title="Connect Jira — upload export"
+        title="Connect Jira · upload export"
         subtitle="JSON export with an `issues` array"
         accept=".json"
         hint="Jira export .json file"
@@ -581,7 +581,7 @@ export default function Sources() {
         open={activeModal === 'confluence'}
         onClose={() => setActiveModal(null)}
         onIngest={runIngest}
-        title="Connect Confluence — upload export"
+        title="Connect Confluence · upload export"
         subtitle="JSON export with a `pages` array"
         accept=".json"
         hint="Confluence export .json file"

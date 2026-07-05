@@ -80,6 +80,61 @@ class TestDuplicateExportIdempotent:
         assert second.status_code == 200
         assert second.json()["documents_ingested"] == 0  # idempotent
 
+    @pytest.mark.asyncio
+    async def test_file_upload_ingested_twice_adds_nothing(self, client):
+        """Regression guard for the Slack double-ingestion incident
+        (240 → 834 docs): re-uploading the same file must create 0 new
+        documents — including rows without an explicit source_id, which
+        get a stable positional default."""
+        import json
+
+        records = [
+            {"content": "Deploy via make deploy-prod", "source_id": "wiki-42"},
+            {"content": "Rollback: revert the release tag and redeploy"},
+        ]
+        payload = json.dumps(records).encode()
+
+        first = await client.post(
+            "/api/ingest/file",
+            files={"file": ("docs.json", payload, "application/json")},
+            data={"source_type": "custom"},
+        )
+        assert first.status_code == 200
+        assert first.json()["documents_created"] == 2
+
+        second = await client.post(
+            "/api/ingest/file",
+            files={"file": ("docs.json", payload, "application/json")},
+            data={"source_type": "custom"},
+        )
+        assert second.status_code == 200
+        assert second.json()["documents_created"] == 0  # idempotent
+        assert second.json()["skipped_existing"] == 2
+
+    @pytest.mark.asyncio
+    async def test_v1_batch_ingested_twice_adds_nothing(self, client):
+        docs = [
+            {
+                "content": "Restart the ingest worker with systemctl",
+                "source_type": "runbook",
+                "source_id": "rb-1",
+            },
+            {
+                "content": "Rotate the API keys quarterly",
+                "source_type": "runbook",
+                "source_id": "rb-2",
+            },
+        ]
+        first = await client.post("/api/v1/ingest/batch", json=docs)
+        assert first.status_code == 201
+        first_ids = {d["id"] for d in first.json()}
+        assert len(first_ids) == 2
+
+        second = await client.post("/api/v1/ingest/batch", json=docs)
+        assert second.status_code == 201
+        # Same documents returned, no new rows created.
+        assert {d["id"] for d in second.json()} == first_ids
+
 
 class TestTinyClustersNotExtracted:
     def test_two_doc_topics_are_noise(self):
