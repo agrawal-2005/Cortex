@@ -61,3 +61,10 @@ chroma_data/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+# graphify — commit the map (GRAPH_REPORT.md, graph.json), ignore local state
+graphify-out/graph.html
+graphify-out/cost.json
+graphify-out/manifest.json
+graphify-out/cache/
+graphify-out/.graphify_*
